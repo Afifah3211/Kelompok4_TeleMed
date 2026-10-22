@@ -31,6 +31,8 @@ export default function DoctorEMR() {
   const { 
     currentUser, 
     appointments, 
+    confirmAppointment,
+    updateAppointmentStatus,
     emrs, 
     saveEMR, 
     softDeleteEMR, 
@@ -306,15 +308,39 @@ export default function DoctorEMR() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {selectedAppointment.status === 'Menunggu' && (
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{ background: '#0F766E', color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        onClick={() => confirmAppointment(selectedAppointment.id, 'Dikonfirmasi')}
+                      >
+                        <CheckCircle2 size={15} />
+                        <span>Konfirmasi Jadwal</span>
+                      </button>
+                    )}
+
+                    {selectedAppointment.status === 'Dikonfirmasi' && (
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{ background: '#2563EB', color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}
+                        onClick={() => confirmAppointment(selectedAppointment.id, 'Sedang Berlangsung')}
+                      >
+                        <Clock size={15} />
+                        <span>Mulai Konsultasi</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
-                      className="btn btn-primary btn-sm"
+                      className="btn btn-outline btn-sm"
                       onClick={() => setTeleconsultationSession(selectedAppointment)}
                       style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                     >
                       <Video size={15} />
-                      <span>Mulai Video Call Medis</span>
+                      <span>Telekonsultasi Room</span>
                     </button>
                   </div>
                 </div>

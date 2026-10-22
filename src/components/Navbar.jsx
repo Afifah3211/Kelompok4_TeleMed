@@ -2,115 +2,143 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Activity, 
-  User, 
-  Stethoscope, 
-  ShieldCheck, 
-  CalendarPlus, 
-  RotateCcw,
-  Bell
+  LogOut,
+  LogIn,
+  UserPlus,
+  ShieldCheck,
+  Stethoscope,
+  User,
+  Pill
 } from 'lucide-react';
 
 export default function Navbar() {
   const { 
     currentUser, 
-    switchRole, 
-    setIsBookingOpen, 
-    resetToFactoryDefault,
-    auditLogs
+    currentPage,
+    navigateTo,
+    logout
   } = useApp();
+
+  const isLoggedIn = !!currentUser && currentPage === 'dashboard';
 
   return (
     <header className="navbar-header">
       <div className="navbar-inner">
         {/* Brand */}
-        <div className="brand-wrapper" onClick={() => switchRole(currentUser.role)}>
+        <div className="brand-wrapper" onClick={() => !isLoggedIn && navigateTo('landing')}>
           <div className="brand-icon">
             <Activity size={24} strokeWidth={2.5} />
           </div>
           <div>
             <div className="brand-title">
-              MediSync
+              TeleMed
               <span style={{ fontSize: '0.65rem', padding: '2px 6px', background: '#DBEAFE', color: '#1D4ED8', borderRadius: '4px', fontWeight: 700 }}>
-                v1.0 PRD
+                Enterprise Cloud
               </span>
             </div>
-            <div className="brand-subtitle">Sistem Manajemen Telemedis</div>
+            <div className="brand-subtitle">
+              {isLoggedIn 
+                ? (currentUser.role === 'pasien' ? 'Portal Pasien Terdaftar' :
+                   currentUser.role === 'dokter' ? 'Portal Rekam Medis Dokter (EMR)' :
+                   currentUser.role === 'admin' ? 'Portal Administrator & Keamanan DRP' :
+                   'Portal Instalasi Farmasi & Apoteker')
+                : 'Sistem Telemedicine & Disaster Recovery Plan'}
+            </div>
           </div>
         </div>
 
-        {/* Persona / Role Quick Switcher (Pasien, Dokter, Admin) */}
-        <div className="role-switcher-capsule">
-          <button
-            type="button"
-            className={`role-tab-btn ${currentUser.role === 'pasien' ? 'active' : ''}`}
-            onClick={() => switchRole('pasien')}
-            title="Masuk sebagai Pasien (Budi Santoso)"
-          >
-            <User size={16} />
-            <span>Pasien</span>
-          </button>
+        {/* PUBLIC NAVIGATION (When NOT logged in) */}
+        {!isLoggedIn && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <nav className="public-nav-links">
+              <button 
+                type="button" 
+                className={`nav-text-link ${currentPage === 'landing' ? 'active' : ''}`}
+                onClick={() => navigateTo('landing')}
+              >
+                Beranda
+              </button>
+            </nav>
 
-          <button
-            type="button"
-            className={`role-tab-btn ${currentUser.role === 'dokter' ? 'active role-dokter' : ''}`}
-            onClick={() => switchRole('dokter')}
-            title="Masuk sebagai Dokter (Dr. Andi Pratama, Sp.PD)"
-          >
-            <Stethoscope size={16} />
-            <span>Dokter (EMR)</span>
-          </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <button 
+                className="btn btn-outline btn-sm"
+                onClick={() => navigateTo('auth', 'login')}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <LogIn size={15} />
+                <span>Masuk</span>
+              </button>
 
-          <button
-            type="button"
-            className={`role-tab-btn ${currentUser.role === 'admin' ? 'active role-admin' : ''}`}
-            onClick={() => switchRole('admin')}
-            title="Masuk sebagai Admin (Aditya Nugraha, S.Kom)"
-          >
-            <ShieldCheck size={16} />
-            <span>Admin (Audit Log & Backup)</span>
-          </button>
-        </div>
+              <button 
+                className="btn btn-primary btn-sm"
+                onClick={() => navigateTo('auth', 'register')}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <UserPlus size={15} />
+                <span>Daftar Pasien</span>
+              </button>
+            </div>
+          </div>
+        )}
 
-        {/* Right Actions & Active User Capsule */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {currentUser.role === 'pasien' && (
-            <button 
-              className="btn btn-primary btn-sm"
-              onClick={() => setIsBookingOpen(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+        {/* AUTHENTICATED NAVIGATION (When Logged In on Dashboard) */}
+        {isLoggedIn && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            {/* Role indicator pill */}
+            <div className="auth-role-pill">
+              {currentUser.role === 'pasien' && (
+                <span className="role-tag tag-pasien">
+                  <User size={14} /> Role Pasien
+                </span>
+              )}
+              {currentUser.role === 'dokter' && (
+                <span className="role-tag tag-dokter">
+                  <Stethoscope size={14} /> Role Dokter (EMR)
+                </span>
+              )}
+              {currentUser.role === 'admin' && (
+                <span className="role-tag tag-admin">
+                  <ShieldCheck size={14} /> Role Admin & DRP
+                </span>
+              )}
+              {currentUser.role === 'apoteker' && (
+                <span className="role-tag tag-apoteker">
+                  <Pill size={14} /> Role Apoteker Farmasi
+                </span>
+              )}
+            </div>
+
+            {/* User Capsule */}
+            <div className="user-capsule" title={`ID: ${currentUser.id} | Email: ${currentUser.email}`}>
+              <img 
+                src={currentUser.avatar} 
+                alt={currentUser.name} 
+                className="user-avatar" 
+              />
+              <div className="user-info-text">
+                <span className="user-name">{currentUser.name}</span>
+                <span className="user-role-badge">
+                  {currentUser.role === 'pasien' && (currentUser.nik ? `NIK: ${currentUser.nik}` : 'Pasien')}
+                  {currentUser.role === 'dokter' && (currentUser.specialty || 'Dokter Spesialis')}
+                  {currentUser.role === 'admin' && 'Administrator IT'}
+                  {currentUser.role === 'apoteker' && 'Apoteker Penanggung Jawab'}
+                </span>
+              </div>
+            </div>
+
+            {/* Logout Button */}
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={logout}
+              title="Keluar dari Akun (Logout)"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#DC2626', borderColor: '#FECACA', background: '#FEF2F2' }}
             >
-              <CalendarPlus size={16} />
-              <span>Daftar Konsultasi</span>
+              <LogOut size={15} />
+              <span>Keluar</span>
             </button>
-          )}
-
-          <button
-            className="btn btn-outline btn-sm"
-            onClick={resetToFactoryDefault}
-            title="Reset dataset sesuai default dokumen PRD"
-            style={{ padding: '6px 10px', color: '#64748B' }}
-          >
-            <RotateCcw size={15} />
-            <span style={{ fontSize: '0.75rem' }}>Reset Demo</span>
-          </button>
-
-          {/* User Profile Pill */}
-          <div className="user-capsule" title={`ID: ${currentUser.id} | Email: ${currentUser.email}`}>
-            <img 
-              src={currentUser.avatar} 
-              alt={currentUser.name} 
-              className="user-avatar" 
-            />
-            <div className="user-info-text">
-              <span className="user-name">{currentUser.name}</span>
-              <span className="user-role-badge">
-                {currentUser.role === 'pasien' && 'Pasien Terdaftar'}
-                {currentUser.role === 'dokter' && (currentUser.specialty || 'Dokter Spesialis')}
-                {currentUser.role === 'admin' && 'Administrator Sistem'}
-              </span>
-            </div>
           </div>
-        </div>
+        )}
       </div>
     </header>
   );

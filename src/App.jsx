@@ -1,28 +1,45 @@
 import React from 'react';
 import { useApp } from './context/AppContext';
 import Navbar from './components/Navbar';
+import LandingPage from './views/LandingPage';
+import AuthView from './views/AuthView';
+import ResetPasswordView from './views/ResetPasswordView';
 import PatientDashboard from './views/PatientDashboard';
 import DoctorEMR from './views/DoctorEMR';
 import AdminAuditLogs from './views/AdminAuditLogs';
+import PharmacistDashboard from './views/PharmacistDashboard';
 import TeleconsultationModal from './components/TeleconsultationModal';
 import BookingModal from './components/BookingModal';
 import EMRDetailModal from './components/EMRDetailModal';
 import Toast from './components/Toast';
-import { ShieldCheck, Heart } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
 export default function App() {
-  const { currentUser } = useApp();
+  const { currentPage, currentUser } = useApp();
 
   return (
     <div className="app-container">
-      {/* Top Navigation */}
+      {/* Top Navigation & Simulation Toolbar */}
       <Navbar />
 
-      {/* Main Role-Specific View */}
+      {/* Main Page Rendering */}
       <main className="main-content">
-        {currentUser.role === 'pasien' && <PatientDashboard />}
-        {currentUser.role === 'dokter' && <DoctorEMR />}
-        {currentUser.role === 'admin' && <AdminAuditLogs />}
+        {currentPage === 'landing' && <LandingPage />}
+        {currentPage === 'auth' && <AuthView />}
+        {currentPage === 'reset-password' && <ResetPasswordView />}
+        
+        {currentPage === 'dashboard' && currentUser && (
+          <>
+            {currentUser.role === 'pasien' && <PatientDashboard />}
+            {currentUser.role === 'dokter' && <DoctorEMR />}
+            {currentUser.role === 'admin' && <AdminAuditLogs />}
+            {currentUser.role === 'apoteker' && <PharmacistDashboard />}
+          </>
+        )}
+
+        {currentPage === 'dashboard' && !currentUser && (
+          <LandingPage />
+        )}
       </main>
 
       {/* Modals and Overlays */}
@@ -54,16 +71,18 @@ export default function App() {
           }}
         >
           <div>
-            <strong>MediSync: Sistem Manajemen Telemedis</strong> • Versi 1.0 (Dokumen PRD Kelompok 4)
+            <strong>TeleMed Healthcare Systems</strong> • Platform Layanan Telemedis Terintegrasi & Cloud Disaster Recovery
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
               <ShieldCheck size={14} color="#0F766E" /> Keamanan Data & Audit Log Aktif
             </span>
             <span>•</span>
-            <span>Aturan Backup 3-2-1</span>
+            <span>RTO &le; 30 Menit (Target PITR)</span>
             <span>•</span>
-            <span>Soft Delete EMR Terproteksi</span>
+            <span>RPO &le; 1 Menit (WAL Archiving)</span>
+            <span>•</span>
+            <span>Aturan Backup 3-2-1 Berlapis</span>
           </div>
         </div>
       </footer>

@@ -16,7 +16,8 @@ import {
   Save,
   Phone,
   MapPin,
-  IdCard
+  IdCard,
+  Pill
 } from 'lucide-react';
 
 export default function PatientDashboard() {
@@ -25,13 +26,14 @@ export default function PatientDashboard() {
     updateUserProfile,
     appointments, 
     emrs, 
+    prescriptions,
     setTeleconsultationSession, 
     setIsBookingOpen, 
     setViewingEMR,
     showToast
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState('jadwal'); // 'jadwal', 'riwayat', 'profil'
+  const [activeTab, setActiveTab] = useState('jadwal'); // 'jadwal', 'riwayat', 'resep', 'profil'
 
   // Patient profile form state
   const [profileForm, setProfileForm] = useState({
@@ -51,6 +53,9 @@ export default function PatientDashboard() {
   
   // Filter EMRs for current patient (excluding soft-deleted ones from regular patient view)
   const patientEMRs = emrs.filter((e) => e.patientId === currentUser.id && !e.isDeleted);
+
+  // Filter Prescriptions for current patient
+  const patientPrescriptions = (prescriptions || []).filter((p) => p.patientId === currentUser.id);
 
   const handleProfileSubmit = (e) => {
     e.preventDefault();
@@ -140,6 +145,32 @@ export default function PatientDashboard() {
           </div>
           <span className="badge badge-accent" style={{ padding: '2px 7px', fontSize: '0.7rem' }}>
             {patientEMRs.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('resep')}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            border: 'none',
+            background: activeTab === 'resep' ? '#EFF6FF' : 'transparent',
+            color: activeTab === 'resep' ? '#1D4ED8' : '#475569',
+            fontWeight: 600,
+            fontSize: '0.9rem',
+            cursor: 'pointer',
+            textAlign: 'left'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Pill size={18} />
+            <span>Resep & Obat</span>
+          </div>
+          <span className="badge badge-accent" style={{ padding: '2px 7px', fontSize: '0.7rem', background: '#F0FDF4', color: '#16A34A', border: '1px solid #BBF7D0' }}>
+            {patientPrescriptions.length}
           </span>
         </button>
 
@@ -557,6 +588,118 @@ export default function PatientDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* VIEW 4: RESEP & OBAT SAYA (FARMASI & APOTEKER INTEGRASI) */}
+        {activeTab === 'resep' && (
+          <div className="card" style={{ padding: '24px' }}>
+            <div className="card-header" style={{ marginBottom: '20px', paddingBottom: '16px' }}>
+              <div>
+                <h2 className="card-title" style={{ fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Pill size={22} color="#059669" />
+                  <span>Resep & Obat Digital</span>
+                </h2>
+                <p style={{ fontSize: '0.85rem', color: '#64748B', marginTop: '2px' }}>
+                  Pantau status penyiapan obat oleh apoteker dan rincian aturan minum obat Anda
+                </p>
+              </div>
+            </div>
+
+            {patientPrescriptions.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '48px 20px', background: '#F8FAFC', borderRadius: '12px' }}>
+                <Pill size={40} color="#94A3B8" style={{ margin: '0 auto 12px' }} />
+                <h3 style={{ fontSize: '1.05rem', color: '#1E293B', marginBottom: '4px' }}>Belum Ada Resep Obat Aktif</h3>
+                <p style={{ fontSize: '0.85rem', color: '#64748B' }}>
+                  Resep akan otomatis muncul di sini setelah dokter menyelesaikan sesi telekonsultasi.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {patientPrescriptions.map((rx) => (
+                  <div 
+                    key={rx.id}
+                    style={{
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '12px',
+                      padding: '20px',
+                      background: '#FFFFFF',
+                      boxShadow: 'var(--shadow-sm)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '14px', borderBottom: '1px solid #F1F5F9', paddingBottom: '12px' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontWeight: 800, color: '#1E293B', fontSize: '1.05rem' }}>{rx.id}</span>
+                          <span style={{ fontSize: '0.75rem', color: '#64748B' }}>• {rx.date}</span>
+                        </div>
+                        <div style={{ fontSize: '0.82rem', color: '#0F766E', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <Stethoscope size={14} /> Dokter: {rx.doctorName}
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span 
+                          style={{
+                            fontSize: '0.78rem',
+                            fontWeight: 700,
+                            padding: '4px 10px',
+                            borderRadius: '20px',
+                            background: rx.status.includes('Selesai') ? '#DCFCE7' : rx.status.includes('Diramu') ? '#FEF3C7' : '#EFF6FF',
+                            color: rx.status.includes('Selesai') ? '#15803D' : rx.status.includes('Diramu') ? '#B45309' : '#1D4ED8',
+                            border: '1px solid',
+                            borderColor: rx.status.includes('Selesai') ? '#86EFAC' : rx.status.includes('Diramu') ? '#FDE68A' : '#BFDBFE'
+                          }}
+                        >
+                          {rx.status}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progress tracking indicator */}
+                    <div style={{ background: '#F8FAFC', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-around', fontSize: '0.78rem', color: '#475569' }}>
+                      <span style={{ fontWeight: 600, color: '#059669', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <CheckCircle2 size={14} /> 1. Diterima Farmasi
+                      </span>
+                      <span>&rarr;</span>
+                      <span style={{ fontWeight: 600, color: rx.status.includes('Diramu') || rx.status.includes('Selesai') ? '#059669' : '#94A3B8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {rx.status.includes('Diramu') || rx.status.includes('Selesai') ? <CheckCircle2 size={14} /> : <Clock size={14} />} 2. Sedang Diramu Apoteker
+                      </span>
+                      <span>&rarr;</span>
+                      <span style={{ fontWeight: 600, color: rx.status.includes('Selesai') ? '#059669' : '#94A3B8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        {rx.status.includes('Selesai') ? <CheckCircle2 size={14} /> : <Clock size={14} />} 3. Siap Diambil / Dikirim
+                      </span>
+                    </div>
+
+                    {/* Rincian Obat */}
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                        Rincian Resep Obat:
+                      </div>
+                      {rx.items && rx.items.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {rx.items.map((it, idx) => (
+                            <div key={idx} style={{ background: '#F1F5F9', padding: '8px 12px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
+                              <strong>{it.medicineName} ({it.quantity})</strong>
+                              <span style={{ color: '#0F766E', fontStyle: 'italic' }}>{it.dosage}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ background: '#F8FAFC', padding: '10px', borderRadius: '6px', fontSize: '0.82rem', whiteSpace: 'pre-wrap' }}>
+                          {rx.prescriptionText}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ fontSize: '0.78rem', color: '#64748B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F8FAFC', paddingTop: '10px' }}>
+                      <span>Catatan Apoteker: <em>{rx.pharmacistNotes || 'Dalam proses penyiapan oleh apoteker klinik.'}</em></span>
+                      <span style={{ color: '#059669', fontWeight: 600 }}>Instalasi Farmasi TeleMed</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </main>

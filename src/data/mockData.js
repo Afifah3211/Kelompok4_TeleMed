@@ -4,6 +4,7 @@ export const INITIAL_USERS = [
     id: 'USR-P01',
     name: 'Budi Santoso',
     email: 'budi.santoso@email.com',
+    password: 'password123',
     role: 'pasien',
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
     nik: '3273011405890002',
@@ -19,6 +20,7 @@ export const INITIAL_USERS = [
     id: 'USR-P02',
     name: 'Siti Rahmawati',
     email: 'siti.rahma@email.com',
+    password: 'password123',
     role: 'pasien',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80',
     nik: '3273026811940005',
@@ -34,6 +36,7 @@ export const INITIAL_USERS = [
     id: 'USR-D01',
     name: 'Dr. Andi Pratama, Sp.PD',
     email: 'dr.andi@medisync.id',
+    password: 'password123',
     role: 'dokter',
     specialty: 'Spesialis Penyakit Dalam',
     sip: '446/123/SIP/2022',
@@ -49,6 +52,7 @@ export const INITIAL_USERS = [
     id: 'USR-D02',
     name: 'Dr. Sarah Wijaya, Sp.A',
     email: 'dr.sarah@medisync.id',
+    password: 'password123',
     role: 'dokter',
     specialty: 'Spesialis Anak (Pediatri)',
     sip: '446/789/SIP/2023',
@@ -64,6 +68,7 @@ export const INITIAL_USERS = [
     id: 'USR-D03',
     name: 'Dr. Bintang Kusuma, Sp.JP',
     email: 'dr.bintang@medisync.id',
+    password: 'password123',
     role: 'dokter',
     specialty: 'Spesialis Jantung & Pembuluh Darah',
     sip: '446/456/SIP/2021',
@@ -79,9 +84,22 @@ export const INITIAL_USERS = [
     id: 'USR-ADM01',
     name: 'Aditya Nugraha, S.Kom',
     email: 'admin.it@medisync.id',
+    password: 'password123',
     role: 'admin',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
     position: 'Kepala IT & Keamanan Data Klinik',
+    status: 'Aktif'
+  },
+  {
+    id: 'USR-APT01',
+    name: 'apt. Dewi Sartika, S.Farm',
+    email: 'apoteker@medisync.id',
+    password: 'password123',
+    role: 'apoteker',
+    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80',
+    sipa: '19950512/SIPA-3273/2022',
+    hospital: 'Instalasi Farmasi TeleMed',
+    position: 'Penanggung Jawab Instalasi Farmasi',
     status: 'Aktif'
   }
 ];
@@ -342,3 +360,119 @@ export const BACKUP_CONFIG = {
     }
   ]
 };
+
+export const INITIAL_MEDICINES = [
+  {
+    id: 'MED-001',
+    name: 'Paracetamol 500 mg',
+    category: 'Analgesik & Antipiretik',
+    form: 'Tablet',
+    stock: 240,
+    unit: 'Strip (10 tab)',
+    price: 5000,
+    dosage: '3x1 tablet sesudah makan bila demam/nyeri',
+    description: 'Pereda nyeri ringan-sedang dan penurun demam.'
+  },
+  {
+    id: 'MED-002',
+    name: 'Amlodipine 5 mg',
+    category: 'Antihipertensi',
+    form: 'Tablet',
+    stock: 180,
+    unit: 'Strip (10 tab)',
+    price: 15000,
+    dosage: '1x1 tablet pagi hari sesudah makan',
+    description: 'Penurun tekanan darah tinggi (hipertensi).'
+  },
+  {
+    id: 'MED-003',
+    name: 'Omeprazole 20 mg',
+    category: 'Saluran Cerna (PPI)',
+    form: 'Kapsul',
+    stock: 150,
+    unit: 'Strip (10 kapsul)',
+    price: 18000,
+    dosage: '2x1 kapsul, 30 menit sebelum makan',
+    description: 'Mengatasi tukak lambung, GERD, dan dispepsia.'
+  },
+  {
+    id: 'MED-004',
+    name: 'Antasida Doen',
+    category: 'Saluran Cerna',
+    form: 'Tablet Kunyah',
+    stock: 300,
+    unit: 'Strip (10 tab)',
+    price: 6000,
+    dosage: '3x1 tablet kunyah, 1 jam sebelum makan',
+    description: 'Menetralkan asam lambung berlebih.'
+  },
+  {
+    id: 'MED-005',
+    name: 'Amoxicillin 500 mg',
+    category: 'Antibiotik',
+    form: 'Kaplet',
+    stock: 110,
+    unit: 'Strip (10 tab)',
+    price: 12000,
+    dosage: '3x1 tablet tiap 8 jam harus dihabiskan',
+    description: 'Antibiotik infeksi bakteri saluran pernapasan.'
+  },
+  {
+    id: 'MED-006',
+    name: 'Cetirizine 10 mg',
+    category: 'Antihistamin / Alergi',
+    form: 'Tablet',
+    stock: 95,
+    unit: 'Strip (10 tab)',
+    price: 10000,
+    dosage: '1x1 tablet malam hari',
+    description: 'Meredakan gejala bersin, gatal, dan rhinitis alergi.'
+  },
+  {
+    id: 'MED-007',
+    name: 'Vitamin C 500 mg + Zinc',
+    category: 'Suplemen & Imun',
+    form: 'Tablet',
+    stock: 400,
+    unit: 'Botol (30 tab)',
+    price: 35000,
+    dosage: '1x1 tablet sehari sesudah makan',
+    description: 'Meningkatkan daya tahan tubuh masa penyembuhan.'
+  }
+];
+
+export const INITIAL_PRESCRIPTIONS = [
+  {
+    id: 'RX-2026-001',
+    emrId: 'EMR-2026-001',
+    appointmentId: 'APT-100',
+    patientId: 'USR-P01',
+    patientName: 'Budi Santoso',
+    doctorName: 'Dr. Andi Pratama, Sp.PD',
+    date: '2026-10-12 09:50 WIB',
+    status: 'Selesai / Sudah Diambil', // Menunggu Penyiapan, Sedang Diramu, Selesai / Sudah Diambil
+    items: [
+      { medicineName: 'Amlodipine 5 mg', quantity: '3 strip', dosage: '1x1 tablet pagi sesudah makan' },
+      { medicineName: 'Paracetamol 500 mg', quantity: '1 strip', dosage: '3x1 tablet bila pusing' }
+    ],
+    notes: 'Pasien diinformasikan kontrol tensi 2 minggu lagi.',
+    pharmacistNotes: 'Telah diserahkan kepada pasien oleh apt. Dewi Sartika, S.Farm.'
+  },
+  {
+    id: 'RX-2026-002',
+    emrId: 'EMR-2026-002',
+    appointmentId: 'APT-098',
+    patientId: 'USR-P02',
+    patientName: 'Siti Rahmawati',
+    doctorName: 'Dr. Andi Pratama, Sp.PD',
+    date: '2026-10-19 10:40 WIB',
+    status: 'Sedang Diramu',
+    items: [
+      { medicineName: 'Omeprazole 20 mg', quantity: '2 strip', dosage: '2x1 kapsul sebelum makan' },
+      { medicineName: 'Antasida Doen', quantity: '2 strip', dosage: '3x1 tablet kunyah sebelum makan' }
+    ],
+    notes: 'Hindari makanan pedas dan kopi.',
+    pharmacistNotes: 'Sedang disiapkan etiket pemakaian oleh apoteker.'
+  }
+];
+
