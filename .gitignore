@@ -22,3 +22,21 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Database SQLite (data lokal — jangan push ke repo)
+*.db
+*.db-shm
+*.db-wal
+
+# Environment files sensitif
+.env
+.env.local
+.env.production
+backend/.env
+
+# Docker build cache & override lokal
+docker-compose.override.yml
+
+# Backup & recovery artifacts lokal
+recovery/*.log
+recovery/*.txt
