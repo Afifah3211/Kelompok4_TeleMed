@@ -42,7 +42,7 @@ const beforeRecords = db.prepare("SELECT id, patient_id, diagnosis, created_at F
 console.log(`📊 KONDISI SEBELUM INSIDEN:`);
 console.log(`   Total rekam medis: ${beforeCount}`);
 beforeRecords.forEach(r => {
-  console.log(`   [EMR #${r.id}] Patient: ${r.patient_id} | Diagnosis: ${r.diagnosis?.substring(0,40)}...`);
+  console.log(`   [EMR #${r.id}] Patient: ${r.patient_id} | Diagnosis: ${r.diagnosis?.substring(0, 40)}...`);
 });
 console.log('');
 
