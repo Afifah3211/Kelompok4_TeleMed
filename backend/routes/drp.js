@@ -33,8 +33,10 @@ function ts() {
   return new Date().toISOString().replace('T', ' ').substring(0, 19);
 }
 function fileTs() {
-  return new Date().toISOString().replace(/[-:T]/g, '').substring(0, 15);
+  // Replace semua karakter non-digit agar nama file bersih (tanpa titik/dash)
+  return new Date().toISOString().replace(/[^0-9]/g, '').substring(0, 15);
 }
+
 
 // ── Helper: baca statistik database ─────────────────────────
 function getDbStats(db) {
@@ -113,56 +115,54 @@ router.post('/snapshot', (req, res) => {
     const snapshotFile = path.join(PITR_DIR, `${snapshotId}.db`);
     const metaFile = path.join(PITR_DIR, `${snapshotId}.meta`);
 
-    // WAL checkpoint untuk konsistensi
+    // WAL checkpoint untuk konsistensi penuh sebelum copy
     db.pragma('wal_checkpoint(TRUNCATE)');
 
-    // Buat snapshot dengan SQLite backup API
-    const snapshotDb = new Database(snapshotFile);
-    db.backup(snapshotDb).then(() => {
-      snapshotDb.close();
+    // Buat snapshot dengan fs.copyFileSync (paling reliabel untuk SQLite WAL mode)
+    fs.copyFileSync(DB_PATH, snapshotFile);
 
-      // Verifikasi integritas
-      const checkDb = new Database(snapshotFile, { readonly: true });
-      const integrity = checkDb.pragma('integrity_check', { simple: true });
-      checkDb.close();
+    // Verifikasi integritas snapshot
+    const checkDb = new Database(snapshotFile, { readonly: true });
+    const integrity = checkDb.pragma('integrity_check', { simple: true });
+    const snapSize = fs.statSync(snapshotFile).size;
+    checkDb.close();
 
-      if (integrity !== 'ok') {
-        fs.unlinkSync(snapshotFile);
-        return res.status(500).json({ success: false, error: 'Snapshot gagal: integritas tidak valid' });
-      }
+    if (integrity !== 'ok') {
+      fs.unlinkSync(snapshotFile);
+      return res.status(500).json({ success: false, error: 'Snapshot gagal: integritas tidak valid' });
+    }
 
-      // Simpan metadata
-      const meta = [
-        `snapshot_id=${snapshotId}`,
-        `timestamp=${timestamp}`,
-        `created_at=${ts()}`,
-        `db_file=${DB_PATH}`,
-        `snapshot_file=${snapshotFile}`,
-        `pre_incident_users=${stats.users}`,
-        `pre_incident_medical_records=${stats.medical_records}`,
-        `pre_incident_consultations=${stats.consultations}`,
-        `pre_incident_audit_logs=${stats.audit_logs}`,
-        `status=CLEAN_SNAPSHOT`,
-      ].join('\n');
-      fs.writeFileSync(metaFile, meta);
+    // Simpan metadata
+    const meta = [
+      `snapshot_id=${snapshotId}`,
+      `timestamp=${timestamp}`,
+      `created_at=${ts()}`,
+      `db_file=${DB_PATH}`,
+      `snapshot_file=${snapshotFile}`,
+      `size_bytes=${snapSize}`,
+      `pre_incident_users=${stats.users}`,
+      `pre_incident_medical_records=${stats.medical_records}`,
+      `pre_incident_consultations=${stats.consultations}`,
+      `pre_incident_audit_logs=${stats.audit_logs}`,
+      `status=CLEAN_SNAPSHOT`,
+    ].join('\n');
+    fs.writeFileSync(metaFile, meta);
 
-      // Catat ke audit log
-      try {
-        db.prepare(`
-          INSERT INTO audit_logs (user_id, action, table_name, ip_address, created_at, user_name, severity, details)
-          VALUES (NULL, 'BACKUP', 'pitr_snapshots', ?, ?, 'DRP System', 'success', ?)
-        `).run(req.ip || '127.0.0.1', ts(), `PITR Snapshot dibuat: ${snapshotId}. Records: ${stats.medical_records} EMR, ${stats.users} users.`);
-      } catch (_) {}
+    // Catat ke audit log
+    try {
+      db.prepare(`
+        INSERT INTO audit_logs (user_id, action, table_name, ip_address, created_at, user_name, severity, details)
+        VALUES (NULL, 'BACKUP', 'pitr_snapshots', ?, ?, 'DRP System', 'success', ?)
+      `).run(req.ip || '127.0.0.1', ts(), `PITR Snapshot dibuat: ${snapshotId}. Records: ${stats.medical_records} EMR, ${stats.users} users.`);
+    } catch (_) {}
 
-      res.json({
-        success: true,
-        snapshot_id: snapshotId,
-        created_at: ts(),
-        stats_at_snapshot: stats,
-        message: `Snapshot PITR berhasil dibuat. Gunakan ID ini untuk recovery: ${snapshotId}`,
-      });
-    }).catch(err => {
-      res.status(500).json({ success: false, error: `Backup gagal: ${err.message}` });
+    res.json({
+      success: true,
+      snapshot_id: snapshotId,
+      created_at: ts(),
+      size_kb: Math.round(snapSize / 1024),
+      stats_at_snapshot: stats,
+      message: `Snapshot PITR berhasil dibuat. Gunakan ID ini untuk recovery: ${snapshotId}`,
     });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

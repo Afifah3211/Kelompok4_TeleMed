@@ -33,24 +33,23 @@ services:
     environment:
       NODE_ENV: production
       PORT: 5000
-      # Lokasi DB di volume persisten (override DB_PATH di database.js)
+      # DB_PATH → lokasi SQLite di volume persisten (Fondasi DRP)
+      # Data TIDAK hilang meski container dihapus, karena ada di volume
       DB_PATH: /app/db/data/medisync.db
+      SCHEMA_PATH: /app/db/schema.sql
       BACKUP_DIR: /app/backups
       RECOVERY_DIR: /app/recovery
       # ALLOW_DRP_DEMO: aktifkan endpoint simulasi insiden untuk demo/presentasi
-      # Set ke 'false' di production nyata
       ALLOW_DRP_DEMO: "true"
 
     volumes:
-      # ── VOLUME PERSISTEN (Fondasi DRP) ──────────────────
-      # SQLite database - data TIDAK hilang saat container restart
+      # ── VOLUME PERSISTEN (Fondasi DRP) ──────────────────────
+      # Volume 1: SQLite database file — PERSISTEN meski container restart/rebuild
       - medisync_db_data:/app/db/data
-      # Direktori backup snapshot (aturan 3-2-1)
+      # Volume 2: Backup snapshot PITR (aturan 3-2-1)
       - medisync_backups:/app/backups
-      # Log & artefak recovery
+      # Volume 3: Log & artefak recovery DRP
       - medisync_recovery:/app/recovery
-      # Schema SQL di-mount read-only agar tidak terhapus
-      - ./backend/db/schema.sql:/app/db/schema.sql:ro
 
     networks:
       - medisync_network
@@ -89,7 +88,11 @@ services:
     restart: unless-stopped
 
     ports:
+<<<<<<< HEAD
       # Ekspos ke host: http://localhost:8000 → Nginx frontend
+=======
+      # Ekspos ke host: http://localhost → Nginx frontend
+>>>>>>> dfdd4a35a9c0e0d77dc76498832a3110da24e2ea
       - "8000:80"
 
     depends_on:
