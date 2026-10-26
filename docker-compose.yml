@@ -88,11 +88,7 @@ services:
     restart: unless-stopped
 
     ports:
-<<<<<<< HEAD
       # Ekspos ke host: http://localhost:8000 → Nginx frontend
-=======
-      # Ekspos ke host: http://localhost → Nginx frontend
->>>>>>> dfdd4a35a9c0e0d77dc76498832a3110da24e2ea
       - "8000:80"
 
     depends_on:
