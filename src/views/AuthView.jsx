@@ -30,43 +30,64 @@ export default function AuthView() {
   const [password, setPassword] = useState('');
   const [nik, setNik] = useState('');
   const [phone, setPhone] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleFillDemo = (demoEmail, demoRole) => {
     setAuthMode('login');
     setEmail(demoEmail);
-    setPassword('password123');
+    setPassword('medisync2026');
     showToast(`Form diisi kredensial ${demoRole}. Klik 'Masuk' untuk melanjutkan.`, 'info');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isLoading) return;
 
     if (authMode === 'register') {
       if (!fullName.trim() || !email.trim() || !password.trim()) {
         showToast('Harap lengkapi semua field yang wajib diisi.', 'danger');
         return;
       }
-      registerPatient({
-        name: fullName.trim(),
-        email: email.trim(),
-        password: password.trim(),
-        nik: nik.trim() || '327301' + Math.floor(1000000000 + Math.random() * 9000000000),
-        phone: phone.trim() || '0812-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000)
-      });
-    } else {
-      if (!email.trim() || !password.trim()) {
-        showToast('Masukkan email dan kata sandi Anda.', 'danger');
+      if (password.trim().length < 8) {
+        showToast('Kata sandi minimal 8 karakter.', 'danger');
         return;
       }
-      loginUser(email, password);
+      setIsLoading(true);
+      try {
+        await registerPatient({
+          fullName: fullName.trim(),
+          email: email.trim(),
+          username: email.trim(),
+          password: password.trim(),
+          nik: nik.trim() || undefined,
+          phone: phone.trim() || undefined
+        });
+      } catch (err) {
+        // error sudah ditangani / ditampilkan via toast di AppContext
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      if (!email.trim() || !password.trim()) {
+        showToast('Masukkan email/username dan kata sandi Anda.', 'danger');
+        return;
+      }
+      setIsLoading(true);
+      try {
+        await loginUser(email.trim(), password.trim());
+      } catch (err) {
+        // error sudah ditangani / ditampilkan via toast di AppContext
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
   const handleGoogleLogin = () => {
     setAuthMode('login');
-    setEmail('budi.santoso@email.com');
-    setPassword('password123');
-    showToast('Kredensial SSO terisi: budi.santoso@email.com. Klik "Masuk" untuk verifikasi.', 'info');
+    setEmail('budi@email.com');
+    setPassword('medisync2026');
+    showToast('Kredensial SSO terisi: budi@email.com. Klik "Masuk" untuk verifikasi.', 'info');
   };
 
   return (
@@ -210,15 +231,21 @@ export default function AuthView() {
                 <input
                   type="password"
                   className="form-input"
-                  placeholder="Minimal 6 karakter"
+                  placeholder={authMode === 'register' ? 'Minimal 8 karakter' : 'Masukkan kata sandi'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
               </div>
 
-              <button type="submit" className="btn btn-primary btn-block btn-lg">
-                {authMode === 'register' ? 'Daftar' : 'Masuk'}
+              <button 
+                type="submit" 
+                className="btn btn-primary btn-block btn-lg"
+                disabled={isLoading}
+              >
+                {isLoading 
+                  ? 'Memproses...' 
+                  : (authMode === 'register' ? 'Daftar' : 'Masuk')}
               </button>
 
               <div className="auth-divider">
@@ -266,46 +293,48 @@ export default function AuthView() {
               )}
             </div>
 
-            {/* Demo Credentials Helper Box for Testing / Examination */}
-            <div className="demo-credentials-box">
-              <div className="demo-box-title">
-                <span className="dot-pulse"></span>
-                <strong>Kredensial Akun Simulasi (Pilih Role):</strong>
+            {/* Demo Credentials Helper Box - Hanya tampil di DEV mode */}
+            {import.meta.env.DEV && (
+              <div className="demo-credentials-box">
+                <div className="demo-box-title">
+                  <span className="dot-pulse"></span>
+                  <strong>Kredensial Akun Simulasi (Pilih Role):</strong>
+                </div>
+                <p className="demo-box-sub">
+                  Klik peran untuk mengisi form otomatis, lalu klik tombol <strong>Masuk</strong>:
+                </p>
+                <div className="demo-pills-row">
+                  <button 
+                    type="button" 
+                    className="quick-role-btn btn-pasien"
+                    onClick={() => handleFillDemo('budi@email.com', 'Pasien (Budi)')}
+                  >
+                    <User size={13} /> Pasien: budi@email.com
+                  </button>
+                  <button 
+                    type="button" 
+                    className="quick-role-btn btn-dokter"
+                    onClick={() => handleFillDemo('dr.andi@medisync.id', 'Dokter (Dr. Andi)')}
+                  >
+                    <Stethoscope size={13} /> Dokter: dr.andi@medisync.id
+                  </button>
+                  <button 
+                    type="button" 
+                    className="quick-role-btn btn-admin"
+                    onClick={() => handleFillDemo('admin@medisync.id', 'Admin IT')}
+                  >
+                    <ShieldCheck size={13} /> Admin: admin@medisync.id
+                  </button>
+                  <button 
+                    type="button" 
+                    className="quick-role-btn btn-apoteker"
+                    onClick={() => handleFillDemo('apoteker@medisync.id', 'Apoteker (apt. Dewi)')}
+                  >
+                    <Pill size={13} /> Apoteker: apoteker@medisync.id
+                  </button>
+                </div>
               </div>
-              <p className="demo-box-sub">
-                Klik peran untuk mengisi form otomatis, lalu klik tombol <strong>Masuk</strong>:
-              </p>
-              <div className="demo-pills-row">
-                <button 
-                  type="button" 
-                  className="quick-role-btn btn-pasien"
-                  onClick={() => handleFillDemo('budi.santoso@email.com', 'Pasien (Budi)')}
-                >
-                  <User size={13} /> Pasien: budi.santoso@email.com
-                </button>
-                <button 
-                  type="button" 
-                  className="quick-role-btn btn-dokter"
-                  onClick={() => handleFillDemo('dr.andi@medisync.id', 'Dokter (Dr. Andi)')}
-                >
-                  <Stethoscope size={13} /> Dokter: dr.andi@medisync.id
-                </button>
-                <button 
-                  type="button" 
-                  className="quick-role-btn btn-admin"
-                  onClick={() => handleFillDemo('admin.it@medisync.id', 'Admin IT (Aditya)')}
-                >
-                  <ShieldCheck size={13} /> Admin: admin.it@medisync.id
-                </button>
-                <button 
-                  type="button" 
-                  className="quick-role-btn btn-apoteker"
-                  onClick={() => handleFillDemo('apoteker@medisync.id', 'Apoteker (apt. Dewi)')}
-                >
-                  <Pill size={13} /> Apoteker: apoteker@medisync.id
-                </button>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

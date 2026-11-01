@@ -102,6 +102,7 @@ export async function apiFetch(endpoint, options = {}) {
 // AUTH API
 // =========================================
 export const authApi = {
+  getMe: () => apiFetch('/auth/me'),
   login: (credentials) =>
     apiFetch('/auth/login', {
       method: 'POST',
