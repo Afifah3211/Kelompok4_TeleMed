@@ -157,6 +157,7 @@ async def create_doctor(
 
 
 @router.patch("/{id}/toggle")
+@router.patch("/{id}/toggle-status")
 async def toggle_user_active(
     id: int,
     request: Request,
