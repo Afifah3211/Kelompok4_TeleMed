@@ -35,6 +35,7 @@ export default function AdminAuditLogs() {
     auditLogs, 
     backupConfig, 
     triggerManualBackup,
+    exportAuditLogsCsv,
     simulatePITRRecovery,
     showToast
   } = useApp();
@@ -102,28 +103,12 @@ export default function AdminAuditLogs() {
     });
   };
 
-  const exportLogsAsCSV = () => {
-    const headers = ['ID', 'Tanggal', 'IP Address', 'ID Pengguna', 'Aksi', 'Tabel Data', 'ID Data', 'Rincian'];
-    const rows = filteredLogs.map((l) => [
-      l.id,
-      `"${l.timestamp}"`,
-      `"${l.ipAddress}"`,
-      `"${l.userName} (${l.userId})"`,
-      l.action,
-      l.tableName,
-      l.dataId,
-      `"${l.details.replace(/"/g, '""')}"`
-    ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `medisync_audit_trail_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast('Log audit berhasil diunduh dalam format CSV.', 'success');
+  const exportLogsAsCSV = async () => {
+    const params = {};
+    if (searchQuery) params.search = searchQuery;
+    if (dateFilter) params.from = dateFilter;
+    if (actionFilter && actionFilter !== 'ALL') params.action = actionFilter;
+    await exportAuditLogsCsv(params);
   };
 
   return (
