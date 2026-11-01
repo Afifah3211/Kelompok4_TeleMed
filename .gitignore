@@ -6,6 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+autoscale.log
 
 node_modules
 dist
@@ -23,6 +24,13 @@ dist-ssr
 *.sln
 *.sw?
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
 # Database SQLite (data lokal — jangan push ke repo)
 *.db
 *.db-shm
@@ -34,9 +42,18 @@ dist-ssr
 .env.production
 backend/.env
 
+# Secrets, Offsite & Forensics
+secrets/
+offsite/
+forensik/
+
 # Docker build cache & override lokal
 docker-compose.override.yml
 
 # Backup & recovery artifacts lokal
 recovery/*.log
 recovery/*.txt
+
+# Stress test results (k6)
+k6/results/*
+!k6/results/.gitkeep

@@ -1,32 +1,14 @@
-#!/bin/sh
-# ============================================================
-# MediSync Backend - Entrypoint Script
-# Tugas Pertemuan 2: Fondasi DRP
-#
-# Fungsi:
-#   1. Pastikan direktori DB ada
-#   2. Jika DB belum ada di volume → jalankan seed otomatis
-#   3. Start server
-# ============================================================
-
+#!/usr/bin/env bash
 set -e
 
-DB_PATH="${DB_PATH:-/app/db/data/medisync.db}"
-DB_DIR=$(dirname "$DB_PATH")
+echo "[entrypoint] Menjalankan seeding awal database..."
+python -m app.seed
 
-echo "[Entrypoint] DB_PATH = $DB_PATH"
-
-# Buat direktori jika belum ada
-mkdir -p "$DB_DIR"
-
-# Jika DB belum ada, jalankan seed untuk isi data awal
-if [ ! -f "$DB_PATH" ]; then
-  echo "[Entrypoint] Database belum ada, menjalankan seed..."
-  node db/seed.js
-  echo "[Entrypoint] Seed selesai!"
-else
-  echo "[Entrypoint] Database sudah ada, skip seed."
-fi
-
-echo "[Entrypoint] Menjalankan server..."
-exec node server.js
+echo "[entrypoint] Menjalankan server Uvicorn..."
+exec uvicorn app.main:app \
+  --host 0.0.0.0 \
+  --port 8000 \
+  --workers 1 \
+  --proxy-headers \
+  --forwarded-allow-ips='*' \
+  --timeout-graceful-shutdown 15

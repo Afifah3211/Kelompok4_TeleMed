@@ -1,73 +1,71 @@
 # ============================================================
-# MediSync Telemedicine Platform - Backend Dockerfile
-# Tugas Pertemuan 2: Containerization & DRP
-#
-# Teknologi: Node.js 22 LTS + better-sqlite3
-# Arsitektur: Multi-stage build (builder → production)
-#
-# Stage 1 (builder): Install & compile native modules di Alpine
-# Stage 2 (production): Image ramping hanya dengan runtime
+# TeleMed - Backend Dockerfile (Python 3.12 FastAPI)
+# Multi-stage build dengan postgresql-client-16 resmi PGDG
 # ============================================================
 
-# ── STAGE 1: Builder — compile native modules ────────────────
-# Pakai Node 22 karena better-sqlite3 v13+ mensyaratkan Node >=22
-FROM node:22-alpine AS builder
+# ── STAGE 1: Builder ──────────────────────────────────────────
+FROM python:3.12-slim-bookworm AS builder
 
-# Install build tools untuk kompilasi better-sqlite3 dari source
-# python3, make, g++ = toolchain C++ untuk node-gyp
-# sqlite = header library SQLite
-RUN apk add --no-cache python3 make g++ sqlite
+WORKDIR /build
 
-WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy package.json duluan → manfaatkan Docker layer cache
-COPY package*.json ./
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
-# Kompilasi dari source (npm_config_build_from_source=true)
-# Menghindari prebuilt binary yang bisa crash di Alpine/WSL2
-RUN npm_config_build_from_source=true npm ci --only=production
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy seluruh source code backend
-COPY . .
-
-# ── STAGE 2: Production — image ramping ──────────────────────
-FROM node:22-alpine AS production
+# ── STAGE 2: Production Runtime ───────────────────────────────
+FROM python:3.12-slim-bookworm AS production
 
 LABEL maintainer="Kelompok4 TeleMed"
-LABEL app="medisync-backend"
-LABEL version="1.0.0"
+LABEL app="telemed-backend"
+LABEL version="2.0.0"
 
-# Runtime: sqlite CLI (untuk debugging) + shared libs C++ (untuk better-sqlite3)
-# libstdc++ dan libgcc diperlukan agar .node binary bisa diload
-RUN apk add --no-cache sqlite libstdc++ libgcc
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:$PATH"
 
-# Buat user non-root (prinsip least privilege)
-RUN addgroup -S medisync && adduser -S medisync -G medisync
+# Install postgresql-client-16 resmi dari PGDG (kompatibel server PostgreSQL 16)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    ca-certificates \
+    gnupg \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-16 \
+    && apt-get purge -y --auto-remove curl gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Buat user non-root telemed (prinsip least privilege)
+RUN groupadd -r telemed && useradd -r -g telemed -d /app telemed
 
 WORKDIR /app
 
-# Copy node_modules yang sudah dikompilasi untuk Linux Alpine
-COPY --from=builder /app/node_modules ./node_modules
+# Salin venv dari stage builder
+COPY --from=builder /opt/venv /opt/venv
 
-# Copy source code dengan ownership user medisync
-COPY --chown=medisync:medisync . .
+# Siapkan direktori /backups dan direktori /app dengan ownership user telemed
+RUN mkdir -p /backups /app \
+    && chown -R telemed:telemed /backups /app
 
-# Buat direktori volume dan pastikan dimiliki user medisync
-# /app/db/data → SQLite database (di-mount sebagai volume persisten)
-# /app/backups → PITR snapshot DRP
-# /app/recovery → Log recovery DRP
-RUN mkdir -p /app/db/data /app/backups /app/recovery \
-    && chown -R medisync:medisync /app/db/data /app/backups /app/recovery \
-    && chmod +x /app/entrypoint.sh
+# Salin source code aplikasi
+COPY --chown=telemed:telemed . /app
 
-EXPOSE 5000
+RUN chmod +x /app/entrypoint.sh
 
-# Health check: pastikan API merespons sebelum dependant service start
-HEALTHCHECK --interval=30s --timeout=10s --start-period=25s --retries=5 \
-  CMD wget -qO- http://localhost:5000/api/health || exit 1
+USER telemed
 
-# Jalankan sebagai non-root
-USER medisync
+EXPOSE 8000
 
-# Entrypoint auto-seed + start server
+# Health check berbasis Python runtime (image slim tidak memiliki wget/curl)
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=5 \
+  CMD python -c "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health',timeout=3)" || exit 1
+
 CMD ["/app/entrypoint.sh"]

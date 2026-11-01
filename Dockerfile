@@ -18,6 +18,10 @@ RUN npm ci
 # Salin semua source code frontend
 COPY . .
 
+# Default API URL relatif (/api) untuk reverse proxy Nginx
+ARG VITE_API_URL=/api
+ENV VITE_API_URL=$VITE_API_URL
+
 # Build production bundle
 RUN npm run build
 

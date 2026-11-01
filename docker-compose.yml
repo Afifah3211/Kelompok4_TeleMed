@@ -1,116 +1,40 @@
 # ============================================================
-# MediSync Telemedicine Platform - Docker Compose
-# Arsitektur: Multi-Container (Frontend + Backend + DRP)
-#
-# Layanan:
-#   - frontend  : React SPA via Nginx (port 80)
-#   - backend   : Node.js Express API (port 5000)
-#   - db-backup : Scheduled backup container (DRP Fondasi)
-#
-# Docker Volumes (Persistensi Data - Fondasi DRP):
-#   - medisync_db_data    → SQLite database file (PRIMARY)
-#   - medisync_backups    → Snapshot backup JSON/binary
-#   - medisync_recovery   → Script & log recovery DRP
-#
-# Jalankan: docker compose up -d --build
-# Stop:     docker compose down
-# Reset:    docker compose down -v  (HAPUS semua volume!)
+# TeleMed Telemedicine Platform - Docker Compose
+# Arsitektur:
+#   Pengguna -> Frontend (Nginx, host port 8080)
+#            -> Backend API (Python FastAPI, internal port 8000)
+#            -> PostgreSQL 16 (internal port 5432)
 # ============================================================
 
 services:
 
   # ─────────────────────────────────────────────────────────
-  # SERVICE 1: BACKEND (Node.js Express API + SQLite)
-  # ─────────────────────────────────────────────────────────
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-      target: production
-    container_name: medisync_backend
-    restart: unless-stopped
-
-    environment:
-      NODE_ENV: production
-      PORT: 5000
-      # DB_PATH → lokasi SQLite di volume persisten (Fondasi DRP)
-      # Data TIDAK hilang meski container dihapus, karena ada di volume
-      DB_PATH: /app/db/data/medisync.db
-      SCHEMA_PATH: /app/db/schema.sql
-      BACKUP_DIR: /app/backups
-      RECOVERY_DIR: /app/recovery
-      # ALLOW_DRP_DEMO: aktifkan endpoint simulasi insiden untuk demo/presentasi
-      ALLOW_DRP_DEMO: "true"
-
-    volumes:
-      # ── VOLUME PERSISTEN (Fondasi DRP) ──────────────────────
-      # Volume 1: SQLite database file — PERSISTEN meski container restart/rebuild
-      - medisync_db_data:/app/db/data
-      # Volume 2: Backup snapshot PITR (aturan 3-2-1)
-      - medisync_backups:/app/backups
-      # Volume 3: Log & artefak recovery DRP
-      - medisync_recovery:/app/recovery
-
-    networks:
-      - medisync_network
-
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:5000/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 20s
-
-    # Batasi resource container
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.50'
-        reservations:
-          memory: 128M
-
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # ─────────────────────────────────────────────────────────
-  # SERVICE 2: FRONTEND (React + Nginx)
+  # SERVICE 1: FRONTEND (React 19 + Vite -> Nginx)
   # ─────────────────────────────────────────────────────────
   frontend:
     build:
       context: .
       dockerfile: Dockerfile
       target: production
-    container_name: medisync_frontend
     restart: unless-stopped
-
     ports:
-      # Ekspos ke host: http://localhost:8000 → Nginx frontend
-      - "8000:80"
-
+      - "8080:80"
     depends_on:
       backend:
         condition: service_healthy
-
     networks:
-      - medisync_network
-
+      - telemed_net
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
-
     deploy:
       resources:
         limits:
-          memory: 128M
           cpus: '0.25'
-
+          memory: 128M
     logging:
       driver: "json-file"
       options:
@@ -118,106 +42,91 @@ services:
         max-file: "2"
 
   # ─────────────────────────────────────────────────────────
-  # SERVICE 3: DRP BACKUP SCHEDULER
-  # Fondasi Disaster Recovery Plan (DRP):
-  #   - Otomatis snapshot database setiap 24 jam
-  #   - Menyimpan ke volume medisync_backups
-  #   - Rotasi backup: simpan 7 hari terakhir
+  # SERVICE 2: BACKEND (Python FastAPI)
+  # Catatan: TANPA container_name dan TANPA ports ke host
+  # agar dapat di-scale: docker compose up -d --scale backend=N
   # ─────────────────────────────────────────────────────────
-  db-backup:
-    image: alpine:3.19
-    container_name: medisync_drp_backup
+  backend:
+    build:
+      context: ./backend
+      target: production
     restart: unless-stopped
-
+    env_file:
+      - .env
+    expose:
+      - "8000"
     depends_on:
-      backend:
+      db:
         condition: service_healthy
-
     volumes:
-      # Akses BACA database (sumber backup)
-      - medisync_db_data:/data/db:ro
-      # Akses TULIS ke direktori backup (tujuan)
-      - medisync_backups:/data/backups
-      # Mount script DRP dari folder recovery/
-      - ./recovery:/scripts:ro
-
+      - backups:/backups
     networks:
-      - medisync_network
-
-    # Jalankan scheduled backup setiap 24 jam
-    # Format: cp database → tambahkan timestamp → hapus backup >7 hari
-    command: >
-      sh -c "
-        apk add --no-cache sqlite curl &&
-        echo '[DRP] MediSync Backup Scheduler aktif' &&
-        while true; do
-          TIMESTAMP=\$$(date '+%Y%m%d_%H%M%S') &&
-          BACKUP_FILE=/data/backups/medisync_drp_\$$TIMESTAMP.db &&
-          echo \"[DRP] \$$(date): Memulai backup ke \$$BACKUP_FILE\" &&
-          if [ -f /data/db/medisync.db ]; then
-            sqlite3 /data/db/medisync.db \".backup '\$$BACKUP_FILE'\" &&
-            echo \"[DRP] \$$(date): Backup BERHASIL - \$$BACKUP_FILE\" ||
-            echo \"[DRP] \$$(date): Backup GAGAL\";
-          else
-            echo \"[DRP] \$$(date): Database belum tersedia, menunggu...\";
-          fi &&
-          find /data/backups -name 'medisync_drp_*.db' -mtime +7 -delete &&
-          echo \"[DRP] \$$(date): Rotasi backup selesai. Tidur 24 jam...\" &&
-          sleep 86400;
-        done
-      "
-
+      - telemed_net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health',timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     deploy:
       resources:
         limits:
-          memory: 64M
-          cpus: '0.10'
-
+          cpus: '0.5'
+          memory: 512M
     logging:
       driver: "json-file"
       options:
-        max-size: "5m"
-        max-file: "5"
+        max-size: "10m"
+        max-file: "3"
+
+  # ─────────────────────────────────────────────────────────
+  # SERVICE 3: DATABASE (PostgreSQL 16 + WAL Archiving)
+  # Catatan: Port TIDAK diekspos ke host di compose utama.
+  # Gunakan docker-compose.dev.yml untuk membuka port ke host.
+  # ─────────────────────────────────────────────────────────
+  db:
+    build:
+      context: ./postgres
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - wal_archive:/wal_archive
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    networks:
+      - telemed_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 # ─────────────────────────────────────────────────────────────
-# DOCKER VOLUMES — FONDASI DRP (Disaster Recovery Plan)
-# Semua data persisten disimpan di volume Docker terkelola.
-# Data TIDAK hilang meskipun container di-restart/rebuild.
+# VOLUMES
 # ─────────────────────────────────────────────────────────────
 volumes:
-  # Volume 1: SQLite database file (PRIMARY DATA STORE)
-  # → Dipasang di backend:/app/db/data & db-backup:/data/db
-  medisync_db_data:
-    driver: local
-    labels:
-      com.medisync.description: "MediSync SQLite Database - PRIMARY"
-      com.medisync.drp: "true"
-      com.medisync.backup-tier: "primary"
-
-  # Volume 2: Backup snapshots (aturan 3-2-1 Copy 1)
-  # → Dipasang di backend:/app/backups & db-backup:/data/backups
-  medisync_backups:
-    driver: local
-    labels:
-      com.medisync.description: "MediSync Backup Snapshots - DRP Tier 1"
-      com.medisync.drp: "true"
-      com.medisync.backup-tier: "copy-1"
-
-  # Volume 3: Recovery logs & artefak DRP
-  # → Dipasang di backend:/app/recovery
-  medisync_recovery:
-    driver: local
-    labels:
-      com.medisync.description: "MediSync Recovery Artifacts & Logs"
-      com.medisync.drp: "true"
-      com.medisync.backup-tier: "recovery"
+  pgdata:
+  wal_archive:
+  backups:
 
 # ─────────────────────────────────────────────────────────────
-# NETWORKS — Jaringan internal terisolasi antar container
+# NETWORKS
 # ─────────────────────────────────────────────────────────────
 networks:
-  medisync_network:
-    driver: bridge
-    name: medisync_net
-    labels:
-      com.medisync.description: "Jaringan internal MediSync"
+  telemed_net:
+    name: telemed_net
