@@ -57,3 +57,6 @@ recovery/*.txt
 # Stress test results (k6)
 k6/results/*
 !k6/results/.gitkeep
+!k6/results/grafik_*.png
+!k6/results/ringkasan_*.csv
+
