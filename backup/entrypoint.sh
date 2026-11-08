@@ -12,8 +12,10 @@ log() {
 
 log "Memulai inisialisasi Backup Job daemon..."
 
-# Pastikan direktori volume lokal & offsite siap
-mkdir -p /backups/dump /backups/base /offsite/dump /offsite/base /offsite/wal /wal_archive
+# Pastikan direktori volume lokal & offsite siap (termasuk pitr untuk backend)
+mkdir -p /backups/dump /backups/base /backups/pitr /offsite/dump /offsite/base /offsite/wal /wal_archive
+# Beri izin tulis ke semua user agar container backend (user: telemed) bisa akses
+chmod -R 777 /backups /wal_archive
 
 # Ekspor environment variables ke /etc/environment agar dapat dibaca oleh proses cron
 log "Mengekspor variabel lingkungan PG* & TZ ke /etc/environment..."
