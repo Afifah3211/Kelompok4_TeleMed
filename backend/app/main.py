@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,6 +34,11 @@ logger = logging.getLogger("telemed.api")
 async def lifespan(app: FastAPI):
     logger.info("Memulai aplikasi TeleMed FastAPI...")
     await init_db_pool()
+    try:
+        files.init_minio_bucket()
+        logger.info(f"MinIO bucket '{settings.MINIO_BUCKET}' berhasil diinisialisasi.")
+    except Exception as exc:
+        logger.warning(f"Inisialisasi MinIO bucket dilewati: {exc}")
     yield
     logger.info("Menghentikan aplikasi TeleMed FastAPI...")
     await close_db_pool()

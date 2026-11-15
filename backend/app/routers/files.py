@@ -69,6 +69,16 @@ def _ensure_bucket(s3):
             raise
 
 
+def init_minio_bucket():
+    """Inisialisasi bucket default saat backend startup."""
+    try:
+        s3 = _s3_client()
+        _ensure_bucket(s3)
+        return True
+    except Exception:
+        return False
+
+
 # ------------------------------------------------------------------ #
 # POST /api/files/upload                                              #
 # ------------------------------------------------------------------ #
@@ -164,10 +174,10 @@ async def presign_url(
 # ------------------------------------------------------------------ #
 @router.get("/list")
 async def list_files(
-    current_user: dict[str, Any] = Depends(require_roles("admin")),
+    current_user: dict[str, Any] = Depends(require_roles("admin", "dokter")),
 ):
     """
-    Daftar semua file di bucket MinIO (hanya admin).
+    Daftar semua file di bucket MinIO (admin & dokter).
     """
     try:
         s3 = _s3_client()

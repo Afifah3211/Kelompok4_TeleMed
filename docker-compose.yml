@@ -1,4 +1,4 @@
-﻿
+
 # ============================================================
 # TeleMed Telemedicine Platform - Docker Compose
 # Arsitektur:
@@ -150,13 +150,14 @@ services:
         max-file: "3"
 
   # ==========================================================
-  # SERVICE 5: MinIO (File Storage / CDN Node Lokal)
+  # SERVICE 5: MinIO / Silo (File Storage / CDN Node Lokal)
   # Pertemuan 5: File Management & Content Delivery Network
+  # Menggunakan pgsty/silo (drop-in open-source fork MinIO di Docker Hub)
   # S3 API  → port 9000 (internal & host)
   # Console → port 9001 (admin web UI)
   # ==========================================================
   minio:
-    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    image: pgsty/silo:latest
     restart: unless-stopped
     command: server /data --console-address ":9001"
     ports:
