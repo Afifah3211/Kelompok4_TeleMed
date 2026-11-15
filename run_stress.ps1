@@ -39,4 +39,8 @@ foreach ($v in $Levels) {
   Start-Sleep -Seconds $CooldownSec
 }
 
-Write-Host "`nSemua level selesai. Buat grafik gabungan:  python k6/plot_results.py $Tag" -ForegroundColor Green
+if ($Script -eq "stress_cdn.js" -or $Tag -eq "cdn") {
+  Write-Host "`nSemua level selesai. Buat grafik gabungan:  python k6/plot_cdn.py" -ForegroundColor Green
+} else {
+  Write-Host "`nSemua level selesai. Buat grafik gabungan:  python k6/plot_results.py $Tag" -ForegroundColor Green
+}

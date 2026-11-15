@@ -51,7 +51,7 @@ for f in files:
     direct_avg = val(m.get("direct_minio_latency", {}), "avg")
     upload_avg = val(m.get("upload_latency", {}), "avg")
     rps = val(m.get("http_reqs", {}), "rate")
-    err = val(m.get("cdn_error_rate", {}), "rate") * 100
+    err = val(m.get("http_req_failed", {}), "rate") * 100
 
     records.append({
         "vu": vu,
