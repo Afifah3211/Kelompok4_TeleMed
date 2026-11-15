@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Calendar, 
@@ -18,6 +18,7 @@ import {
   Archive
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import FileUpload from '../components/FileUpload';
 
 const ICD10_PRESETS = [
   { code: 'I10', label: 'Hipertensi Primer Esensial' },
@@ -69,7 +70,14 @@ export default function DoctorEMR() {
     weight: '68 kg'
   });
 
-  // When changing selected patient, update complaint template
+    // State untuk lampiran file (CDN upload - Pertemuan 5)
+  const [attachments, setAttachments] = useState([]);
+  const handleFileUploaded = (fileData) => {
+    setAttachments((prev) => [...prev, fileData]);
+    showToast('Lampiran berhasil diupload ke CDN', 'success');
+  };
+
+// When changing selected patient, update complaint template
   const handleSelectAppointment = (apt) => {
     setSelectedAppointmentId(apt.id);
     setComplaint(apt.complaint || '');
@@ -456,6 +464,27 @@ export default function DoctorEMR() {
                   />
                 </div>
 
+                {/* Lampiran File - CDN Upload (Pertemuan 5) */}
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <FileUpload
+                    label="📎 Lampiran Dokumen / Foto (opsional)"
+                    onUploaded={handleFileUploaded}
+                    accept="image/*,application/pdf,text/plain"
+                  />
+                  {attachments.length > 0 && (
+                    <div style={{ marginTop: '8px', fontSize: '0.78rem', color: '#6B7280' }}>
+                      <strong>{attachments.length} lampiran terlampir:</strong>{' '}
+                      {attachments.map((a, i) => (
+                        <span key={i}>
+                          <a href={a.cdn_url} target="_blank" rel="noopener noreferrer" style={{ color: '#3B82F6' }}>
+                            {a.filename}
+                          </a>
+                          {i < attachments.length - 1 ? ', ' : ''}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 {/* 4. Clean Text Input for 'Resep Obat' (PRD Spec) */}
                 <div className="form-group">
                   <label className="form-label">

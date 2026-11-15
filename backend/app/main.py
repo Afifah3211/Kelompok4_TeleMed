@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,6 +15,7 @@ from app.routers import (
     backup,
     consultations,
     drp,
+    files,
     health,
     medical_records,
     medicines,
@@ -99,3 +100,4 @@ app.include_router(medicines.router, prefix="/api/medicines", tags=["medicines"]
 app.include_router(prescriptions.router, prefix="/api/prescriptions", tags=["prescriptions"])
 app.include_router(backup.router, prefix="/api/backup", tags=["backup"])
 app.include_router(drp.router, prefix="/api/drp", tags=["drp"])
+app.include_router(files.router, prefix="/api/files", tags=["files"])

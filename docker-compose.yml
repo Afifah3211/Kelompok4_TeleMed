@@ -1,4 +1,4 @@
-
+﻿
 # ============================================================
 # TeleMed Telemedicine Platform - Docker Compose
 # Arsitektur:
@@ -57,6 +57,8 @@ services:
       - "8000"
     depends_on:
       db:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     volumes:
       - backups:/backups
@@ -147,6 +149,43 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # ==========================================================
+  # SERVICE 5: MinIO (File Storage / CDN Node Lokal)
+  # Pertemuan 5: File Management & Content Delivery Network
+  # S3 API  → port 9000 (internal & host)
+  # Console → port 9001 (admin web UI)
+  # ==========================================================
+  minio:
+    image: minio/minio:RELEASE.2024-11-07T00-52-20Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes:
+      - minio_data:/data
+    networks:
+      - telemed_net
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
 # ============================================================
 # SECRETS
 # ============================================================
@@ -161,6 +200,7 @@ volumes:
   pgdata:
   wal_archive:
   backups:
+  minio_data:
 
 # ============================================================
 # NETWORKS

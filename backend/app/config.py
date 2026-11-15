@@ -1,4 +1,4 @@
-import re
+﻿import re
 import logging
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator
@@ -19,6 +19,14 @@ class Settings(BaseSettings):
     CORS_ORIGIN: str = "http://localhost:8080"
     SEED_PASSWORD: str = "medisync2026"
     APP_ENV: str = "production"
+
+    # --- MinIO / File Storage (CDN lokal) ---
+    MINIO_ENDPOINT: str = "minio:9000"
+    MINIO_ACCESS_KEY: str = "minioadmin"
+    MINIO_SECRET_KEY: str = "minioadmin123"
+    MINIO_BUCKET: str = "telemed-files"
+    MINIO_PUBLIC_HOST: str = "http://localhost:9000"
+    MINIO_USE_SSL: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",

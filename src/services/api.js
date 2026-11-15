@@ -1,4 +1,4 @@
-/**
+﻿/**
  * TeleMed - API Client (Frontend -> FastAPI Backend)
  * Menghubungkan React frontend ke FastAPI REST API backend dengan JWT Bearer Auth.
  * Token disimpan di sessionStorage (bukan localStorage).
@@ -310,5 +310,67 @@ export const prescriptionsApi = {
     }),
 };
 
+// =========================================
+// FILES API (MinIO CDN - Pertemuan 5)
+// =========================================
+export const filesApi = {
+  /**
+   * Upload file ke MinIO via backend.
+   * @param {File} file - File object dari input[type=file]
+   * @param {function} onProgress - opsional callback progress (tidak dipakai di fetch biasa)
+   * @returns {{ key, url, cdn_url, filename, size_bytes, content_type }}
+   */
+  upload: async (file) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch(`${BASE_URL}/files/upload`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        // Jangan set Content-Type — biarkan browser set multipart boundary otomatis
+      },
+      body: formData,
+    });
+
+    if (res.status === 401) {
+      clearToken();
+      window.dispatchEvent(new CustomEvent('telemed:unauthorized'));
+    }
+
+    const data = await res.json();
+    if (!res.ok) {
+      const error = new Error(data?.detail || `Upload gagal: HTTP ${res.status}`);
+      error.status = res.status;
+      throw error;
+    }
+    return data;
+  },
+
+  /**
+   * Dapatkan presigned URL untuk download file.
+   * @param {string} key - object key MinIO (misal "dokter/abc123.pdf")
+   */
+  getPresignedUrl: (key) => apiFetch(`/files/presign/${encodeURIComponent(key)}`),
+
+  /**
+   * Daftar semua file di bucket (admin only).
+   */
+  listFiles: () => apiFetch('/files/list'),
+
+  /**
+   * Hapus file (admin only).
+   * @param {string} key - object key MinIO
+   */
+  deleteFile: (key) =>
+    apiFetch(`/files/${encodeURIComponent(key)}`, { method: 'DELETE' }),
+
+  /**
+   * Helper: buat URL CDN publik dari object key.
+   * Menggunakan Nginx proxy /files/ → MinIO (Pertemuan 5).
+   */
+  cdnUrl: (key) => `/files/${key}`,
+};
 // Health check
 export const healthCheck = () => apiFetch('/health');
