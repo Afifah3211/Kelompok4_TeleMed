@@ -273,7 +273,7 @@ export default function DoctorEMR() {
             }}
           >
             <HardDrive size={16} />
-            <span>📁 CDN & Storage File Explorer (Pertemuan 5)</span>
+            <span>📁 Berkas Medis (CDN Storage)</span>
           </button>
         </div>
       </div>

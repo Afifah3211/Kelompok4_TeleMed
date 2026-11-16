@@ -25,6 +25,22 @@ class UpdateStatusRequest(BaseModel):
     status: str
 
 
+@router.post("/cleanup-test-data")
+async def cleanup_test_consultations(
+    current_user: dict[str, Any] = Depends(require_roles("admin")),
+):
+    """Bersihkan rekaman dummy hasil k6 load testing (admin only)."""
+    from app.db import get_db_pool
+    pool = await get_db_pool()
+    async with pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "DELETE FROM consultations WHERE complaint ILIKE '%k6%' OR complaint ILIKE '%load test%'"
+            )
+            deleted_count = cur.rowcount
+    return {"message": f"Berhasil menghapus {deleted_count} data pengujian", "deleted": deleted_count}
+
+
 @router.get("")
 async def list_consultations(
     status_filter: Optional[str] = Query(None, alias="status"),
@@ -53,9 +69,13 @@ async def list_consultations(
     if role == "pasien":
         where_clauses.append("c.patient_id = %s")
         params.append(pid)
+        # Sembunyikan rekaman pengujian beban (k6 load test) dari pasien
+        where_clauses.append("(c.complaint IS NULL OR (c.complaint NOT ILIKE '%k6%' AND c.complaint NOT ILIKE '%load test%'))")
     elif role == "dokter":
         where_clauses.append("c.doctor_id = %s")
         params.append(pid)
+        # Sembunyikan rekaman pengujian beban (k6 load test) dari dokter
+        where_clauses.append("(c.complaint IS NULL OR (c.complaint NOT ILIKE '%k6%' AND c.complaint NOT ILIKE '%load test%'))")
         if patient_id_filter is not None:
             where_clauses.append("c.patient_id = %s")
             params.append(patient_id_filter)

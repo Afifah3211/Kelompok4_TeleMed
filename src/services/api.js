@@ -176,6 +176,10 @@ export const consultationsApi = {
       method: 'PATCH',
       body: { status },
     }),
+  cleanupTestData: () =>
+    apiFetch('/consultations/cleanup-test-data', {
+      method: 'POST',
+    }),
 };
 
 // =========================================
