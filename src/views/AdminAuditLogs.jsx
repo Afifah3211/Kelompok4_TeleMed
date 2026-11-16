@@ -1,20 +1,20 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { 
-  ShieldCheck, 
-  Users, 
-  FileSpreadsheet, 
-  Database, 
-  Search, 
-  Filter, 
-  Download, 
-  RefreshCw, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Plus, 
-  Lock, 
-  Server, 
-  Cloud, 
+import {
+  ShieldCheck,
+  Users,
+  FileSpreadsheet,
+  Database,
+  Search,
+  Filter,
+  Download,
+  RefreshCw,
+  AlertTriangle,
+  CheckCircle2,
+  Plus,
+  Lock,
+  Server,
+  Cloud,
   HardDrive,
   Eye,
   Trash2,
@@ -32,13 +32,13 @@ import FileUpload from '../components/FileUpload';
 import { filesApi, consultationsApi } from '../services/api';
 
 export default function AdminAuditLogs() {
-  const { 
-    currentUser, 
-    users, 
-    addUser, 
-    toggleUserStatus, 
-    auditLogs, 
-    backupConfig, 
+  const {
+    currentUser,
+    users,
+    addUser,
+    toggleUserStatus,
+    auditLogs,
+    backupConfig,
     triggerManualBackup,
     exportAuditLogsCsv,
     simulatePITRRecovery,
@@ -76,10 +76,14 @@ export default function AdminAuditLogs() {
   };
 
   const handleCleanupTestData = async () => {
-    if (!window.confirm('Bersihkan seluruh riwayat data k6 load test dari antrean pasien & database?')) return;
+    if (!window.confirm('Bersihkan seluruh data pengujian k6 load test dari database dan file dummy MinIO?')) return;
     try {
-      const res = await consultationsApi.cleanupTestData();
-      showToast(res.message || 'Data pengujian berhasil dibersihkan!', 'success');
+      const [resDb, resFiles] = await Promise.all([
+        consultationsApi.cleanupTestData(),
+        filesApi.cleanupTestFiles(),
+      ]);
+      showToast(`${resDb.message}. ${resFiles.message}.`, 'success');
+      loadStorageFiles();
     } catch (err) {
       showToast(err.message || 'Gagal membersihkan data pengujian', 'danger');
     }
@@ -109,7 +113,7 @@ export default function AdminAuditLogs() {
   const patients = users.filter((u) => u.role === 'pasien');
 
   const filteredLogs = auditLogs.filter((log) => {
-    const matchesSearch = 
+    const matchesSearch =
       log.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       log.userId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       log.ipAddress.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -156,11 +160,11 @@ export default function AdminAuditLogs() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Top Banner */}
-      <div 
-        style={{ 
-          background: '#0F172A', 
-          borderRadius: '16px', 
-          border: '1px solid #1E293B', 
+      <div
+        style={{
+          background: '#0F172A',
+          borderRadius: '16px',
+          border: '1px solid #1E293B',
           padding: '24px 28px',
           color: '#FFFFFF',
           display: 'flex',
@@ -171,15 +175,15 @@ export default function AdminAuditLogs() {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div 
-            style={{ 
-              width: '48px', 
-              height: '48px', 
-              borderRadius: '12px', 
-              background: '#4F46E5', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center' 
+          <div
+            style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '12px',
+              background: '#4F46E5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
             }}
           >
             <ShieldCheck size={28} color="#fff" />
@@ -200,11 +204,11 @@ export default function AdminAuditLogs() {
         </div>
 
         {/* 4 Tabs Navigation */}
-        <div 
-          style={{ 
-            display: 'flex', 
-            background: '#1E293B', 
-            padding: '4px', 
+        <div
+          style={{
+            display: 'flex',
+            background: '#1E293B',
+            padding: '4px',
             borderRadius: '12px',
             gap: '4px',
             flexWrap: 'wrap'
@@ -337,12 +341,12 @@ export default function AdminAuditLogs() {
           </div>
 
           {/* Filter Bar */}
-          <div 
-            style={{ 
-              display: 'flex', 
-              gap: '12px', 
-              padding: '16px 20px', 
-              background: '#F8FAFC', 
+          <div
+            style={{
+              display: 'flex',
+              gap: '12px',
+              padding: '16px 20px',
+              background: '#F8FAFC',
               borderBottom: '1px solid #E2E8F0',
               flexWrap: 'wrap',
               alignItems: 'center'
@@ -422,9 +426,9 @@ export default function AdminAuditLogs() {
                   filteredLogs.map((log) => {
                     const isDeleteAction = log.action === 'DELETE' || log.severity === 'danger';
                     return (
-                      <tr 
-                        key={log.id} 
-                        style={{ 
+                      <tr
+                        key={log.id}
+                        style={{
                           backgroundColor: isDeleteAction ? '#FEF2F2' : 'inherit'
                         }}
                       >
@@ -440,10 +444,10 @@ export default function AdminAuditLogs() {
                         </td>
                         <td>
                           {isDeleteAction ? (
-                            <span 
-                              style={{ 
-                                backgroundColor: '#FEE2E2', 
-                                color: '#DC2626', 
+                            <span
+                              style={{
+                                backgroundColor: '#FEE2E2',
+                                color: '#DC2626',
                                 border: '1px solid #FECACA',
                                 padding: '3px 8px',
                                 borderRadius: '6px',
@@ -496,8 +500,8 @@ export default function AdminAuditLogs() {
                 Daftar dokter terdaftar, nomor Surat Izin Praktik (SIP/STR), rumah sakit mitra, dan status aktif.
               </p>
             </div>
-            <button 
-              className="btn btn-primary btn-sm" 
+            <button
+              className="btn btn-primary btn-sm"
               onClick={() => {
                 setNewUserForm(prev => ({ ...prev, role: 'dokter' }));
                 setIsAddUserOpen(true);
@@ -525,10 +529,10 @@ export default function AdminAuditLogs() {
                   <tr key={doc.id}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <img 
-                          src={doc.avatar} 
-                          alt={doc.name} 
-                          style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }} 
+                        <img
+                          src={doc.avatar}
+                          alt={doc.name}
+                          style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }}
                         />
                         <div>
                           <div style={{ fontWeight: 700 }}>{doc.name}</div>
@@ -578,8 +582,8 @@ export default function AdminAuditLogs() {
                 Informasi identitas kependudukan (NIK), kontak, alamat, golongan darah, dan status pasien.
               </p>
             </div>
-            <button 
-              className="btn btn-primary btn-sm" 
+            <button
+              className="btn btn-primary btn-sm"
               onClick={() => {
                 setNewUserForm(prev => ({ ...prev, role: 'pasien' }));
                 setIsAddUserOpen(true);
@@ -608,10 +612,10 @@ export default function AdminAuditLogs() {
                   <tr key={p.id}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <img 
-                          src={p.avatar} 
-                          alt={p.name} 
-                          style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }} 
+                        <img
+                          src={p.avatar}
+                          alt={p.name}
+                          style={{ width: '38px', height: '38px', borderRadius: '50%', objectFit: 'cover' }}
                         />
                         <div>
                           <div style={{ fontWeight: 700 }}>{p.name}</div>
@@ -654,11 +658,11 @@ export default function AdminAuditLogs() {
       {activeAdminTab === 'backup-drp' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {/* Simulation Trigger Box matching Chapter 5 of PDF */}
-          <div 
-            style={{ 
-              background: 'linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%)', 
-              borderRadius: '16px', 
-              padding: '24px', 
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%)',
+              borderRadius: '16px',
+              padding: '24px',
               color: '#FFFFFF',
               border: '1px solid #312E81'
             }}
@@ -677,7 +681,7 @@ export default function AdminAuditLogs() {
               </div>
 
               <div style={{ display: 'flex', gap: '10px' }}>
-                <button 
+                <button
                   className="btn btn-primary"
                   style={{ background: '#4F46E5', display: 'flex', alignItems: 'center', gap: '8px' }}
                   onClick={() => simulatePITRRecovery('2026-10-19 13:44:00')}
@@ -701,7 +705,7 @@ export default function AdminAuditLogs() {
                 { step: '8', title: 'Validasi', desc: 'Checksum data' },
                 { step: '9', title: 'Start & RTO', desc: 'Pulih (24 menit)' }
               ].map((s, idx) => (
-                <div 
+                <div
                   key={idx}
                   style={{
                     background: 'rgba(255, 255, 255, 0.05)',
@@ -741,12 +745,12 @@ export default function AdminAuditLogs() {
             {/* 3-2-1 Architectural Status Nodes */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '24px' }}>
               {backupConfig.storageNodes.map((node, i) => (
-                <div 
-                  key={i} 
-                  style={{ 
-                    border: '1.5px solid #E2E8F0', 
-                    borderRadius: '12px', 
-                    padding: '18px', 
+                <div
+                  key={i}
+                  style={{
+                    border: '1.5px solid #E2E8F0',
+                    borderRadius: '12px',
+                    padding: '18px',
                     background: '#FFFFFF',
                     borderTop: i === 0 ? '4px solid #1D4ED8' : i === 1 ? '4px solid #0F766E' : '4px solid #7C3AED'
                   }}
@@ -765,7 +769,7 @@ export default function AdminAuditLogs() {
 
                   <div style={{ fontSize: '0.85rem', color: '#334155', fontWeight: 600 }}>{node.type}</div>
                   <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '2px' }}>Lokasi: {node.location}</div>
-                  
+
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '14px', paddingTop: '10px', borderTop: '1px solid #F1F5F9', fontSize: '0.78rem' }}>
                     <span>Ukuran: <strong>{node.size}</strong></span>
                     <span>Latensi: <strong>{node.latency}</strong></span>
@@ -775,11 +779,11 @@ export default function AdminAuditLogs() {
             </div>
 
             {/* Backup Specifications details */}
-            <div 
-              style={{ 
-                background: '#F8FAFC', 
-                border: '1px solid #E2E8F0', 
-                borderRadius: '12px', 
+            <div
+              style={{
+                background: '#F8FAFC',
+                border: '1px solid #E2E8F0',
+                borderRadius: '12px',
                 padding: '20px',
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
@@ -1018,7 +1022,7 @@ export default function AdminAuditLogs() {
               <h3 style={{ fontSize: '1.15rem', fontWeight: 700 }}>
                 {newUserForm.role === 'dokter' ? 'Tambah Dokter Baru' : 'Daftarkan Pasien Baru'}
               </h3>
-              <button 
+              <button
                 onClick={() => setIsAddUserOpen(false)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}
               >

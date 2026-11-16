@@ -47,15 +47,16 @@ export default function PatientDashboard() {
     allergies: currentUser.allergies || 'Tidak Ada'
   });
 
-  // Filter appointments for current patient
-  const patientAppointments = appointments.filter((a) => a.patientId === currentUser.id);
+  // Filter appointments for current patient (gunakan patientId profil dari DB)
+  const myPatientId = currentUser.patientId ?? currentUser.id;
+  const patientAppointments = appointments.filter((a) => a.patientId === myPatientId);
   const upcomingAppointments = patientAppointments.filter((a) => a.status !== 'Selesai' && a.status !== 'Dibatalkan');
   
   // Filter EMRs for current patient (excluding soft-deleted ones from regular patient view)
-  const patientEMRs = emrs.filter((e) => e.patientId === currentUser.id && !e.isDeleted);
+  const patientEMRs = emrs.filter((e) => e.patientId === myPatientId && !e.isDeleted);
 
   // Filter Prescriptions for current patient
-  const patientPrescriptions = (prescriptions || []).filter((p) => p.patientId === currentUser.id);
+  const patientPrescriptions = (prescriptions || []).filter((p) => p.patientId === myPatientId);
 
   const handleProfileSubmit = (e) => {
     e.preventDefault();

@@ -471,6 +471,7 @@ export function AppProvider({ children }) {
     clearToken();
     setCurrentUser(null);
     setCurrentPage('landing');
+    setUsers([]);
     setAppointments([]);
     setEmrs([]);
     setAuditLogs([]);

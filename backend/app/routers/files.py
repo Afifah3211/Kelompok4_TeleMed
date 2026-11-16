@@ -177,12 +177,19 @@ async def list_files(
     current_user: dict[str, Any] = Depends(require_roles("admin", "dokter")),
 ):
     """
-    Daftar semua file di bucket MinIO (admin & dokter).
+    Daftar file di bucket MinIO:
+    - Admin: semua file di bucket.
+    - Dokter: hanya file medis di prefix 'dokter/' (tidak melihat file admin/testing).
     """
+    role = current_user.get("role")
+    list_kwargs = {"Bucket": settings.MINIO_BUCKET}
+    if role == "dokter":
+        list_kwargs["Prefix"] = "dokter/"
+
     try:
         s3 = _s3_client()
         _ensure_bucket(s3)
-        resp = s3.list_objects_v2(Bucket=settings.MINIO_BUCKET)
+        resp = s3.list_objects_v2(**list_kwargs)
         objects = resp.get("Contents", [])
     except Exception as exc:
         raise HTTPException(
@@ -204,6 +211,37 @@ async def list_files(
             for obj in objects
         ],
     }
+
+
+# ------------------------------------------------------------------ #
+# POST /api/files/cleanup-test-data (Admin only)                      #
+# ------------------------------------------------------------------ #
+@router.post("/cleanup-test-data", status_code=status.HTTP_200_OK)
+async def cleanup_test_files(
+    current_user: dict[str, Any] = Depends(require_roles("admin")),
+):
+    """Hapus semua file dummy hasil stress test k6 (prefix 'admin/') dari MinIO (admin only)."""
+    try:
+        s3 = _s3_client()
+        _ensure_bucket(s3)
+        deleted = 0
+        paginator = s3.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=settings.MINIO_BUCKET, Prefix="admin/"):
+            contents = page.get("Contents", [])
+            if contents:
+                delete_keys = [{"Key": obj["Key"]} for obj in contents]
+                s3.delete_objects(
+                    Bucket=settings.MINIO_BUCKET,
+                    Delete={"Objects": delete_keys},
+                )
+                deleted += len(delete_keys)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Gagal membersihkan file test di MinIO: {exc}",
+        )
+
+    return {"message": f"Berhasil menghapus {deleted} file dummy testing dari MinIO", "deleted": deleted}
 
 
 # ------------------------------------------------------------------ #

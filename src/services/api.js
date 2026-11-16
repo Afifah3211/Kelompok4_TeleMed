@@ -1,4 +1,4 @@
-﻿/**
+/**
  * TeleMed - API Client (Frontend -> FastAPI Backend)
  * Menghubungkan React frontend ke FastAPI REST API backend dengan JWT Bearer Auth.
  * Token disimpan di sessionStorage (bukan localStorage).
@@ -369,6 +369,12 @@ export const filesApi = {
    */
   deleteFile: (key) =>
     apiFetch(`/files/${encodeURIComponent(key)}`, { method: 'DELETE' }),
+
+  /**
+   * Bersihkan file dummy stress test (admin only).
+   */
+  cleanupTestFiles: () =>
+    apiFetch('/files/cleanup-test-data', { method: 'POST' }),
 
   /**
    * Helper: buat URL CDN publik dari object key.

@@ -70,43 +70,11 @@ export default function DoctorEMR() {
   // Tab: 'emr-active' (split-screen today's consultation) or 'arsip' (EMR list & soft deleted records)
   const [currentView, setCurrentView] = useState('emr-active');
 
-  // Demo fallback jika database belum memiliki jadwal konsultasi hari ini
-  const demoFallbackAppointments = [
-    {
-      id: 101,
-      patientId: 1,
-      patientName: 'Budi Santoso',
-      patientNik: '3273011405890002',
-      patientGender: 'Laki-laki',
-      patientAge: '35 thn',
-      complaint: 'Pusing berputar dan tengkuk terasa berat sejak kemarin.',
-      time: '09:00 WIB',
-      status: 'Menunggu'
-    },
-    {
-      id: 102,
-      patientId: 2,
-      patientName: 'Siti Rahmawati',
-      patientNik: '3273026811940005',
-      patientGender: 'Perempuan',
-      patientAge: '29 thn',
-      complaint: 'Nyeri ulu hati panas dan perih setelah minum kopi.',
-      time: '10:30 WIB',
-      status: 'Menunggu'
-    }
-  ];
-
-  // Filter jadwal konsultasi dokter: cocokkan user id atau doctorId profil, atau tampilkan semua untuk demo
-  const filteredAppointments = appointments.filter(
-    (a) =>
-      a.doctorId === currentUser?.id ||
-      a.doctorId === currentUser?.doctorId ||
-      currentUser?.role === 'admin'
+  // Filter jadwal konsultasi dokter sesuai doctorId profil di DB
+  const myDoctorId = currentUser?.doctorId ?? currentUser?.id;
+  const doctorAppointments = appointments.filter(
+    (a) => a.doctorId === myDoctorId || currentUser?.role === 'admin'
   );
-
-  const doctorAppointments = filteredAppointments.length > 0 
-    ? filteredAppointments 
-    : (appointments.length > 0 ? appointments : demoFallbackAppointments);
 
   // Selected patient for active consultation (default to first active appointment)
   const [selectedAppointmentId, setSelectedAppointmentId] = useState(
@@ -627,35 +595,6 @@ export default function DoctorEMR() {
             </div>
           </div>
 
-          {/* Banner Akses Cepat CDN Pertemuan 5 */}
-          <div style={{ margin: '0 24px 16px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '12px', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <HardDrive size={20} color="#166534" />
-              </div>
-              <div>
-                <strong style={{ color: '#166534', fontSize: '0.9rem', display: 'block' }}>
-                  Fitur Tugas Pertemuan 5: File Management & CDN Berbasis Docker
-                </strong>
-                <span style={{ color: '#374151', fontSize: '0.8rem' }}>
-                  Ingin upload foto/dokumen medis ke MinIO S3 & menguji URL Edge CDN? Buka tab <strong>Pemeriksaan Hari Ini</strong> atau tab <strong>CDN File Explorer</strong>.
-                </span>
-              </div>
-            </div>
-            <button
-              type="button"
-              className="btn btn-sm btn-primary"
-              style={{ backgroundColor: '#059669', borderColor: '#059669', fontWeight: 600 }}
-              onClick={() => {
-                setCurrentView('cdn-files');
-                loadStorageFiles();
-              }}
-            >
-              <UploadCloud size={14} />
-              <span>Buka CDN File Explorer</span>
-            </button>
-          </div>
-
           <div className="table-container">
             <table className="data-table">
               <thead>
@@ -743,66 +682,35 @@ export default function DoctorEMR() {
       )}
 
       {/* =========================================================================
-          VIEW 3: CDN & FILE STORAGE EXPLORER (Pertemuan 5 CDN)
+          VIEW 3: BERKAS MEDIS & LAMPIRAN DOKTER
          ========================================================================= */}
       {currentView === 'cdn-files' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* CDN Architecture Banner */}
+          {/* Medical Files Header */}
           <div className="card" style={{ padding: '24px', background: 'linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%)', border: '1px solid #BBF7D0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
                   <HardDrive size={24} color="#059669" />
                   <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#065F46', margin: 0 }}>
-                    File Management & Content Delivery Network (CDN)
+                    Berkas Medis & Lampiran Pasien
                   </h2>
-                  <span className="badge" style={{ backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 700 }}>
-                    Pertemuan 5
-                  </span>
                 </div>
-                <p style={{ fontSize: '0.88rem', color: '#374151', margin: 0, maxWidth: '800px', lineHeight: 1.5 }}>
-                  Arsitektur CDN lokal: Seluruh file statis (dokumen/gambar) dilayani langsung oleh <strong>Nginx Edge Cache</strong> (port 8080) dan diteruskan ke <strong>MinIO S3 Storage</strong> (port 9000/9001). Backend app server tidak melayani file statis dari disk lokal.
+                <p style={{ fontSize: '0.88rem', color: '#374151', margin: 0, maxWidth: '750px', lineHeight: 1.5 }}>
+                  Unggah dan kelola dokumen hasil laboratorium, resep, atau foto radiologi pasien dengan penyimpanan terenkripsi.
                 </p>
               </div>
 
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <a
-                  href="http://localhost:9001"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-sm btn-outline"
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <ExternalLink size={14} />
-                  <span>Buka MinIO Console (:9001)</span>
-                </a>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-primary"
-                  onClick={loadStorageFiles}
-                  disabled={loadingFiles}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#059669', borderColor: '#059669' }}
-                >
-                  <RefreshCw size={14} className={loadingFiles ? 'spin' : ''} />
-                  <span>Refresh Storage</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Verification Info Badges */}
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '18px' }}>
-              <div style={{ background: '#FFFFFF', padding: '8px 14px', borderRadius: '8px', border: '1px solid #D1FAE5', fontSize: '0.8rem', color: '#065F46' }}>
-                🌐 <strong>Edge CDN Node:</strong> Nginx Reverse Proxy (<code>/files/</code>)
-              </div>
-              <div style={{ background: '#FFFFFF', padding: '8px 14px', borderRadius: '8px', border: '1px solid #D1FAE5', fontSize: '0.8rem', color: '#065F46' }}>
-                🗄️ <strong>S3 Bucket:</strong> <code>telemed-files</code> (MinIO/Silo)
-              </div>
-              <div style={{ background: '#FFFFFF', padding: '8px 14px', borderRadius: '8px', border: '1px solid #D1FAE5', fontSize: '0.8rem', color: '#065F46' }}>
-                ⚡ <strong>Cache Policy:</strong> <code>Cache-Control: public, max-age=86400</code>
-              </div>
-              <div style={{ background: '#FFFFFF', padding: '8px 14px', borderRadius: '8px', border: '1px solid #D1FAE5', fontSize: '0.8rem', color: '#065F46' }}>
-                🔍 <strong>Response Header:</strong> <code>X-CDN-Node: telemed-minio-local</code>
-              </div>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                onClick={loadStorageFiles}
+                disabled={loadingFiles}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#059669', borderColor: '#059669' }}
+              >
+                <RefreshCw size={14} className={loadingFiles ? 'spin' : ''} />
+                <span>Refresh Daftar</span>
+              </button>
             </div>
           </div>
 
