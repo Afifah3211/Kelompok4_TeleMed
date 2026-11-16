@@ -70,12 +70,14 @@ async def list_consultations(
         where_clauses.append("c.patient_id = %s")
         params.append(pid)
         # Sembunyikan rekaman pengujian beban (k6 load test) dari pasien
-        where_clauses.append("(c.complaint IS NULL OR (c.complaint NOT ILIKE '%k6%' AND c.complaint NOT ILIKE '%load test%'))")
+        where_clauses.append("(c.complaint IS NULL OR (c.complaint NOT ILIKE %s AND c.complaint NOT ILIKE %s))")
+        params.extend(["%k6%", "%load test%"])
     elif role == "dokter":
         where_clauses.append("c.doctor_id = %s")
         params.append(pid)
         # Sembunyikan rekaman pengujian beban (k6 load test) dari dokter
-        where_clauses.append("(c.complaint IS NULL OR (c.complaint NOT ILIKE '%k6%' AND c.complaint NOT ILIKE '%load test%'))")
+        where_clauses.append("(c.complaint IS NULL OR (c.complaint NOT ILIKE %s AND c.complaint NOT ILIKE %s))")
+        params.extend(["%k6%", "%load test%"])
         if patient_id_filter is not None:
             where_clauses.append("c.patient_id = %s")
             params.append(patient_id_filter)

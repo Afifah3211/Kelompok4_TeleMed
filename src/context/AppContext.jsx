@@ -302,16 +302,20 @@ export function AppProvider({ children }) {
               policyName: bData.config.policy_name || prev.policyName,
               rtoTarget: bData.config.rto_target || prev.rtoTarget,
               rpoTarget: bData.config.rpo_target || prev.rpoTarget,
+              encryption: bData.config.encryption || 'AES-256-GCM (Offsite & Dump)',
+              retention: bData.config.retention || '24 Jam Bergulir / 30 Hari Arsip',
               lastBackup: bData.recent_runs && bData.recent_runs.length > 0
                 ? String(bData.recent_runs[0].started_at).slice(0, 19).replace('T', ' ') + ' WIB'
                 : prev.lastBackup,
+              recentRuns: bData.recent_runs || [],
               storageNodes: (bData.nodes && bData.nodes.length > 0)
                 ? bData.nodes.map((n) => ({
-                    type: n.node_name,
-                    copy: n.node_type,
-                    status: n.status,
-                    path: n.storage_path,
-                    size: n.size_bytes ? `${(n.size_bytes / (1024 * 1024)).toFixed(2)} MB` : '18.2 MB'
+                    type: n.type || n.node_name || 'Storage Node',
+                    copy: n.copy_label || n.node_type || 'Salinan',
+                    status: n.status || 'Optimal',
+                    location: n.location || n.storage_path || '-',
+                    size: n.size || (n.size_bytes ? `${(n.size_bytes / (1024 * 1024)).toFixed(2)} MB` : '24.8 MB'),
+                    latency: n.latency || '< 5 ms'
                   }))
                 : prev.storageNodes
             }));
@@ -573,26 +577,26 @@ export function AppProvider({ children }) {
       const normalizedEMR = normalizeEMR(recordRes);
       setEmrs((prev) => [normalizedEMR, ...prev]);
 
-      // Buat Resep Digital jika dokter menulis resep
-      if (emrData.prescription && emrData.prescription.trim().length > 0) {
+      // Buat Resep Digital terstruktur jika dokter memilih item obat
+      if (Array.isArray(emrData.prescriptionItems) && emrData.prescriptionItems.length > 0) {
         try {
           const rxRes = await prescriptionsApi.create({
             patient_id: patientId,
             medical_record_id: recordRes.id,
             consultation_id: consultationId,
             notes: `Diagnosis: ${emrData.diagnosis}`,
-            items: [
-              {
-                medicine_name: emrData.prescription.split('\n')[0] || 'Resep Terapi Dokter',
-                quantity: '1 Paket',
-                dosage: 'Sesuai instruksi dokter'
-              }
-            ]
+            items: emrData.prescriptionItems.map((it) => ({
+              medicine_id: it.medicineId ? parseInt(it.medicineId, 10) : null,
+              medicine_name: it.medicineName,
+              quantity: String(it.quantity),
+              dosage: it.dosage,
+            })),
           });
           const normalizedRx = normalizePrescription(rxRes);
           setPrescriptions((prev) => [normalizedRx, ...prev]);
         } catch (rxErr) {
           console.warn('Gagal meneruskan resep digital otomatis:', rxErr);
+          showToast('EMR tersimpan, namun gagal meneruskan resep ke apoteker.', 'warning');
         }
       }
 

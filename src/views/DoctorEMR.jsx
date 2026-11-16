@@ -16,14 +16,11 @@ import {
   Eye,
   AlertTriangle,
   Archive,
-  HardDrive,
-  ExternalLink,
-  UploadCloud,
-  RefreshCw
+  Plus,
+  Pill
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import FileUpload from '../components/FileUpload';
-import { filesApi } from '../services/api';
 
 const ICD10_PRESETS = [
   { code: 'I10', label: 'Hipertensi Primer Esensial' },
@@ -40,6 +37,7 @@ export default function DoctorEMR() {
     confirmAppointment,
     updateAppointmentStatus,
     emrs,
+    medicines,
     saveEMR,
     softDeleteEMR,
     restoreEMR,
@@ -47,25 +45,6 @@ export default function DoctorEMR() {
     setViewingEMR,
     showToast
   } = useApp();
-
-  const [cdnFiles, setCdnFiles] = useState([]);
-  const [loadingFiles, setLoadingFiles] = useState(false);
-
-  const loadStorageFiles = async () => {
-    setLoadingFiles(true);
-    try {
-      const data = await filesApi.listFiles();
-      setCdnFiles(data.files || []);
-    } catch (err) {
-      console.error('Gagal memuat file CDN:', err);
-    } finally {
-      setLoadingFiles(false);
-    }
-  };
-
-  useEffect(() => {
-    loadStorageFiles();
-  }, []);
 
   // Tab: 'emr-active' (split-screen today's consultation) or 'arsip' (EMR list & soft deleted records)
   const [currentView, setCurrentView] = useState('emr-active');
@@ -87,13 +66,62 @@ export default function DoctorEMR() {
   const [complaint, setComplaint] = useState(selectedAppointment?.complaint || '');
   const [diagnosis, setDiagnosis] = useState('');
   const [action, setAction] = useState('');
-  const [prescription, setPrescription] = useState('');
+  const [prescriptionItems, setPrescriptionItems] = useState([]);
   const [vitals, setVitals] = useState({
     bp: '120/80 mmHg',
     heartRate: '76 bpm',
     temperature: '36.7 °C',
     weight: '68 kg'
   });
+
+  const DOSAGE_OPTIONS = [
+    '3 x 1 sehari sesudah makan',
+    '3 x 1 sehari sebelum makan',
+    '2 x 1 sehari sesudah makan',
+    '2 x 1 sehari sebelum makan',
+    '1 x 1 sehari pagi sesudah makan',
+    '1 x 1 sehari malam hari',
+    'Jika perlu (maks. 3 x 1 sehari)',
+    'Sesuai anjuran dokter'
+  ];
+
+  const handleAddPrescriptionItem = () => {
+    if (!medicines || medicines.length === 0) return;
+    const firstMed = medicines[0];
+    setPrescriptionItems((prev) => [
+      ...prev,
+      {
+        medicineId: firstMed.id,
+        medicineName: firstMed.name,
+        quantity: 1,
+        unit: firstMed.unit || 'Strip',
+        dosage: firstMed.dosage || DOSAGE_OPTIONS[0]
+      }
+    ]);
+  };
+
+  const handleRemovePrescriptionItem = (idx) => {
+    setPrescriptionItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handlePrescriptionItemChange = (idx, field, value) => {
+    setPrescriptionItems((prev) =>
+      prev.map((item, i) => {
+        if (i !== idx) return item;
+        if (field === 'medicineId') {
+          const med = (medicines || []).find((m) => String(m.id) === String(value));
+          return {
+            ...item,
+            medicineId: med ? med.id : value,
+            medicineName: med ? med.name : item.medicineName,
+            unit: med?.unit || 'Strip',
+            dosage: med?.dosage || item.dosage
+          };
+        }
+        return { ...item, [field]: value };
+      })
+    );
+  };
 
   useEffect(() => {
     if (selectedAppointment) {
@@ -114,7 +142,8 @@ export default function DoctorEMR() {
     setComplaint(apt.complaint || '');
     setDiagnosis('');
     setAction('');
-    setPrescription('');
+    setPrescriptionItems([]);
+    setAttachments([]);
   };
 
   // Submit active consultation form
@@ -135,6 +164,19 @@ export default function DoctorEMR() {
       finalAction += '\n\n[Lampiran Dokumen CDN]:\n' + attachments.map(a => `- ${a.filename}: ${a.cdn_url}`).join('\n');
     }
 
+    const formattedPrescriptionItems = prescriptionItems
+      .filter((it) => it.medicineId && it.medicineName)
+      .map((it) => ({
+        medicineId: it.medicineId,
+        medicineName: it.medicineName,
+        quantity: `${it.quantity || 1} ${it.unit || 'Strip'}`,
+        dosage: it.dosage || 'Sesuai anjuran dokter'
+      }));
+
+    const prescriptionSummary = formattedPrescriptionItems.length > 0
+      ? formattedPrescriptionItems.map((it) => `${it.medicineName} (${it.quantity}) - ${it.dosage}`).join('\n')
+      : 'Tidak ada resep obat (terapi suportif).';
+
     saveEMR({
       appointmentId: selectedAppointment.id,
       patientId: selectedAppointment.patientId,
@@ -145,7 +187,8 @@ export default function DoctorEMR() {
       complaint: complaint.trim(),
       diagnosis: diagnosis.trim(),
       action: finalAction,
-      prescription: prescription.trim() || 'Tidak ada resep obat (terapi suportif).',
+      prescription: prescriptionSummary,
+      prescriptionItems: formattedPrescriptionItems,
       vitals
     });
 
@@ -160,7 +203,8 @@ export default function DoctorEMR() {
     // Reset form for next patient
     setDiagnosis('');
     setAction('');
-    setPrescription('');
+    setPrescriptionItems([]);
+    setAttachments([]);
   };
 
   // Preset ICD-10 quick filler
@@ -225,23 +269,6 @@ export default function DoctorEMR() {
           >
             <Archive size={16} />
             <span>Semua Rekam Medis & Arsip Soft Delete ({emrs.length})</span>
-          </button>
-
-          <button
-            className={`btn btn-sm ${currentView === 'cdn-files' ? 'btn-primary' : 'btn-outline'}`}
-            onClick={() => {
-              setCurrentView('cdn-files');
-              loadStorageFiles();
-            }}
-            style={{
-              backgroundColor: currentView === 'cdn-files' ? '#0F766E' : 'transparent',
-              borderColor: '#0F766E',
-              color: currentView === 'cdn-files' ? '#FFFFFF' : '#0F766E',
-              fontWeight: 600
-            }}
-          >
-            <HardDrive size={16} />
-            <span>📁 Berkas Medis (CDN Storage)</span>
           </button>
         </div>
       </div>
@@ -538,17 +565,97 @@ export default function DoctorEMR() {
                     </div>
                   )}
                 </div>
-                {/* 4. Clean Text Input for 'Resep Obat' (PRD Spec) */}
+                {/* 4. Dropdown Resep Obat Elektronik (Sinkron Database Obat & Apoteker) */}
                 <div className="form-group">
-                  <label className="form-label">
-                    Resep Obat Elektronik (e-Prescription)
-                  </label>
-                  <textarea
-                    className="form-textarea"
-                    placeholder="Nama obat, sediaan dosis, signa/aturan pakai, jumlah tablet. Contoh:&#10;Amlodipine 5mg (1x1 tablet pagi sesudah makan - No. XXX)&#10;Paracetamol 500mg (3x1 tablet jika pusing - No. X)"
-                    value={prescription}
-                    onChange={(e) => setPrescription(e.target.value)}
-                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <label className="form-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Pill size={15} color="#0F766E" />
+                      <span>Resep Obat Elektronik (e-Prescription)</span>
+                    </label>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline"
+                      onClick={handleAddPrescriptionItem}
+                      disabled={!medicines || medicines.length === 0}
+                      style={{ padding: '4px 10px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '4px', color: '#0F766E', borderColor: '#0F766E' }}
+                    >
+                      <Plus size={14} />
+                      <span>Tambah Obat</span>
+                    </button>
+                  </div>
+
+                  {prescriptionItems.length === 0 ? (
+                    <div style={{ padding: '14px', background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: '8px', fontSize: '0.82rem', color: '#64748B', textAlign: 'center' }}>
+                      Belum ada obat dipilih. Klik <strong>"+ Tambah Obat"</strong> untuk meresepkan obat dari database farmasi (otomatis diteruskan ke Apoteker).
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {prescriptionItems.map((item, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: '2fr 100px 2fr auto',
+                            gap: '8px',
+                            alignItems: 'center',
+                            padding: '10px',
+                            background: '#F8FAFC',
+                            border: '1px solid #E2E8F0',
+                            borderRadius: '8px'
+                          }}
+                        >
+                          <select
+                            className="form-select"
+                            value={item.medicineId}
+                            onChange={(e) => handlePrescriptionItemChange(idx, 'medicineId', e.target.value)}
+                            style={{ fontSize: '0.82rem' }}
+                          >
+                            {(medicines || []).map((med) => (
+                              <option key={med.id} value={med.id}>
+                                {med.name} (Stok: {med.stock} {med.unit || ''})
+                              </option>
+                            ))}
+                          </select>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <input
+                              type="number"
+                              min="1"
+                              className="form-input"
+                              value={item.quantity}
+                              onChange={(e) => handlePrescriptionItemChange(idx, 'quantity', e.target.value)}
+                              style={{ fontSize: '0.82rem', padding: '6px 8px' }}
+                              title="Jumlah Obat"
+                            />
+                          </div>
+
+                          <select
+                            className="form-select"
+                            value={item.dosage}
+                            onChange={(e) => handlePrescriptionItemChange(idx, 'dosage', e.target.value)}
+                            style={{ fontSize: '0.82rem' }}
+                          >
+                            {DOSAGE_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                            {!DOSAGE_OPTIONS.includes(item.dosage) && item.dosage && (
+                              <option value={item.dosage}>{item.dosage}</option>
+                            )}
+                          </select>
+
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-danger-outline"
+                            onClick={() => handleRemovePrescriptionItem(idx)}
+                            style={{ padding: '6px 8px' }}
+                            title="Hapus item obat"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Primary Blue Button 'Simpan Rekam Medis' (PRD Spec) */}
@@ -604,7 +711,6 @@ export default function DoctorEMR() {
                   <th>Nama Pasien</th>
                   <th>Diagnosis</th>
                   <th>Dokter Pemeriksa</th>
-                  <th>Status Keamanan Data</th>
                   <th style={{ textAlign: 'right' }}>Aksi</th>
                 </tr>
               </thead>
@@ -623,24 +729,13 @@ export default function DoctorEMR() {
                     </td>
                     <td>
                       <span className="badge badge-accent">{item.diagnosis}</span>
-                    </td>
-                    <td>{item.doctorName}</td>
-                    <td>
-                      {item.isDeleted ? (
-                        <div>
-                          <span className="badge badge-danger">
-                            <AlertTriangle size={12} /> Terhapus (Soft Delete)
-                          </span>
-                          <div style={{ fontSize: '0.72rem', color: '#DC2626', marginTop: '3px' }}>
-                            {item.deletedAt}
-                          </div>
+                      {item.isDeleted && (
+                        <div style={{ fontSize: '0.72rem', color: '#DC2626', marginTop: '3px', fontWeight: 600 }}>
+                          Terhapus (Soft Delete)
                         </div>
-                      ) : (
-                        <span className="badge badge-selesai">
-                          <CheckCircle2 size={12} /> Aktif & Terverifikasi
-                        </span>
                       )}
                     </td>
+                    <td>{item.doctorName}</td>
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: '6px' }}>
                         <button
@@ -677,147 +772,6 @@ export default function DoctorEMR() {
                 ))}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-
-      {/* =========================================================================
-          VIEW 3: BERKAS MEDIS & LAMPIRAN DOKTER
-         ========================================================================= */}
-      {currentView === 'cdn-files' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Medical Files Header */}
-          <div className="card" style={{ padding: '24px', background: 'linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%)', border: '1px solid #BBF7D0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
-                  <HardDrive size={24} color="#059669" />
-                  <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#065F46', margin: 0 }}>
-                    Berkas Medis & Lampiran Pasien
-                  </h2>
-                </div>
-                <p style={{ fontSize: '0.88rem', color: '#374151', margin: 0, maxWidth: '750px', lineHeight: 1.5 }}>
-                  Unggah dan kelola dokumen hasil laboratorium, resep, atau foto radiologi pasien dengan penyimpanan terenkripsi.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                className="btn btn-sm btn-primary"
-                onClick={loadStorageFiles}
-                disabled={loadingFiles}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#059669', borderColor: '#059669' }}
-              >
-                <RefreshCw size={14} className={loadingFiles ? 'spin' : ''} />
-                <span>Refresh Daftar</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Upload Card */}
-          <div className="card" style={{ padding: '24px' }}>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '6px', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <UploadCloud size={18} color="#2563EB" />
-              Upload Aset Medis ke CDN Storage
-            </h3>
-            <p style={{ fontSize: '0.82rem', color: '#64748B', marginBottom: '16px' }}>
-              Unggah file dokumen resep, hasil lab (PDF), atau gambar medis (JPG, PNG). File otomatis masuk ke MinIO S3 dan disajikan via CDN.
-            </p>
-
-            <FileUpload
-              label="Pilih atau Drop File Aset Medis"
-              onUploaded={() => {
-                loadStorageFiles();
-                showToast('File berhasil diunggah ke CDN & MinIO Storage!', 'success');
-              }}
-            />
-          </div>
-
-          {/* Stored Files Table */}
-          <div className="card" style={{ padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FileText size={18} color="#059669" />
-                Daftar File Tersimpan di MinIO S3 & CDN ({cdnFiles.length})
-              </h3>
-              <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
-                Bucket: <strong>telemed-files</strong>
-              </span>
-            </div>
-
-            {loadingFiles ? (
-              <div style={{ textAlign: 'center', padding: '32px', color: '#64748B' }}>Memuat daftar file dari storage...</div>
-            ) : cdnFiles.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748B', background: '#F8FAFC', borderRadius: '12px', border: '1px dashed #CBD5E1' }}>
-                <HardDrive size={36} color="#94A3B8" style={{ margin: '0 auto 10px' }} />
-                <div style={{ fontWeight: 600 }}>Belum ada file di MinIO Storage</div>
-                <div style={{ fontSize: '0.82rem', marginTop: '4px' }}>
-                  Gunakan box upload di atas untuk mengunggah file uji coba pertama Anda.
-                </div>
-              </div>
-            ) : (
-              <div className="table-container">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>No</th>
-                      <th>Object Key (MinIO)</th>
-                      <th>Ukuran</th>
-                      <th>Terakhir Diubah</th>
-                      <th>Akses CDN (Nginx Edge)</th>
-                      <th style={{ textAlign: 'right' }}>Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cdnFiles.map((file, idx) => (
-                      <tr key={file.key}>
-                        <td>{idx + 1}</td>
-                        <td>
-                          <span style={{ fontWeight: 600, color: '#1E293B', fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                            {file.key}
-                          </span>
-                        </td>
-                        <td>{(file.size_bytes / 1024).toFixed(1)} KB</td>
-                        <td style={{ fontSize: '0.8rem', color: '#64748B' }}>
-                          {new Date(file.last_modified).toLocaleString('id-ID')}
-                        </td>
-                        <td>
-                          <a
-                            href={file.cdn_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              color: '#059669',
-                              fontWeight: 600,
-                              textDecoration: 'underline',
-                              fontSize: '0.85rem'
-                            }}
-                          >
-                            <span>{file.cdn_url}</span>
-                            <ExternalLink size={12} />
-                          </a>
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <a
-                            href={file.cdn_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="btn btn-sm btn-outline"
-                            style={{ padding: '4px 10px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                          >
-                            <ExternalLink size={13} />
-                            <span>Buka di CDN</span>
-                          </a>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         </div>
       )}

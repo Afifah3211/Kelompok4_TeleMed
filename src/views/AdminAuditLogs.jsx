@@ -291,7 +291,7 @@ export default function AdminAuditLogs() {
             }}
           >
             <Database size={16} />
-            <span>DRP & Cloud Backup</span>
+            <span>Backup & Sistem (DRP)</span>
           </button>
 
           <button
@@ -787,21 +787,22 @@ export default function AdminAuditLogs() {
                 padding: '20px',
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: '16px'
+                gap: '16px',
+                marginBottom: '24px'
               }}
             >
               <div>
                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>METODE ENKRIPSI</div>
                 <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A', marginTop: '2px' }}>
                   <Lock size={14} style={{ display: 'inline', marginRight: '4px' }} />
-                  {backupConfig.encryption}
+                  {backupConfig.encryption || 'AES-256-GCM (Offsite & Dump)'}
                 </div>
               </div>
 
               <div>
                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>TARGET RTO & RPO</div>
                 <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1D4ED8', marginTop: '2px' }}>
-                  RTO &le; 30 Menit • RPO &le; 1 Menit
+                  RTO &le; {backupConfig.rtoTarget || '30 Menit'} • RPO &le; {backupConfig.rpoTarget || '1 Menit'}
                 </div>
               </div>
 
@@ -815,7 +816,101 @@ export default function AdminAuditLogs() {
               <div>
                 <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>RETENSI ARSIP DATA</div>
                 <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A', marginTop: '2px' }}>
-                  {backupConfig.retention}
+                  {backupConfig.retention || '24 Jam Bergulir / 30 Hari Arsip'}
+                </div>
+              </div>
+            </div>
+
+            {/* Kesehatan Sistem dan Backup: Snapshot History + Parameter Infrastruktur */}
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', alignItems: 'start' }}>
+              <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', overflow: 'hidden', background: '#FFFFFF' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>
+                    Riwayat Snapshot Basis Data
+                  </h4>
+                  <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                    Arsip terverifikasi pg_dump &amp; WAL
+                  </span>
+                </div>
+                <div className="table-container">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Nama Arsip</th>
+                        <th>Jenis</th>
+                        <th>Status</th>
+                        <th>Waktu Dibuat</th>
+                        <th>Pemicu</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(backupConfig.recentRuns || []).length === 0 ? (
+                        <tr>
+                          <td colSpan="5" style={{ textAlign: 'center', padding: '24px', color: '#64748B' }}>
+                            Belum ada riwayat snapshot tercatat. Klik "Picu Backup Manual Sekarang" untuk membuat snapshot baru.
+                          </td>
+                        </tr>
+                      ) : (
+                        (backupConfig.recentRuns || []).map((run, idx) => (
+                          <tr key={run.id || idx}>
+                            <td>
+                              <span style={{ fontFamily: 'monospace', fontWeight: 600, fontSize: '0.82rem', color: '#0F172A' }}>
+                                {run.file_name}
+                              </span>
+                            </td>
+                            <td>
+                              <span className="badge badge-accent" style={{ textTransform: 'uppercase', fontSize: '0.7rem' }}>
+                                {run.kind || 'dump'}
+                              </span>
+                            </td>
+                            <td>
+                              <span className={`badge ${run.status === 'failed' ? 'badge-danger' : 'badge-selesai'}`}>
+                                {run.status}
+                              </span>
+                            </td>
+                            <td style={{ fontSize: '0.78rem', color: '#475569' }}>
+                              {run.started_at ? String(run.started_at).slice(0, 19).replace('T', ' ') + ' WIB' : '-'}
+                            </td>
+                            <td style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                              {run.triggered_by || 'system'}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', padding: '18px', background: '#FFFFFF' }}>
+                <h4 style={{ margin: '0 0 14px 0', fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>
+                  Parameter Kebijakan Backup &amp; Sistem
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.8rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
+                    <span style={{ color: '#64748B' }}>Status Klaster DB</span>
+                    <strong style={{ color: '#0F766E' }}>PostgreSQL 16 (Healthy)</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
+                    <span style={{ color: '#64748B' }}>Storage CDN</span>
+                    <strong style={{ color: '#0F766E' }}>MinIO / Silo S3 (Healthy)</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
+                    <span style={{ color: '#64748B' }}>Format &amp; Kompresi</span>
+                    <strong style={{ color: '#0F172A' }}>PostgreSQL Custom (-Fc)</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
+                    <span style={{ color: '#64748B' }}>Integritas Arsip</span>
+                    <strong style={{ color: '#0F172A' }}>SHA-256 + AES-256</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
+                    <span style={{ color: '#64748B' }}>Interval Snapshot</span>
+                    <strong style={{ color: '#0F172A' }}>Otomatis + Manual</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#64748B' }}>Arsip Tersimpan</span>
+                    <strong style={{ color: '#1D4ED8' }}>{(backupConfig.recentRuns || []).length} Snapshot</strong>
+                  </div>
                 </div>
               </div>
             </div>

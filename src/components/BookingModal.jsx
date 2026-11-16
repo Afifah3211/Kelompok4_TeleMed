@@ -1,18 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Calendar, Clock, Stethoscope, Video, MessageCircle, X, CheckCircle2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+
+function getTodayLocalDate() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 export default function BookingModal() {
   const { isBookingOpen, setIsBookingOpen, users, addAppointment, currentUser } = useApp();
 
   const doctors = users.filter((u) => u.role === 'dokter');
+  const todayStr = getTodayLocalDate();
 
   const [selectedDoctorId, setSelectedDoctorId] = useState(doctors[0]?.id || '');
-  const [date, setDate] = useState('2026-10-20');
+  const [date, setDate] = useState(todayStr);
   const [time, setTime] = useState('13:30 WIB');
   const [type, setType] = useState('Video Telekonsultasi');
   const [complaint, setComplaint] = useState('');
+
+  useEffect(() => {
+    if (isBookingOpen) {
+      const currentToday = getTodayLocalDate();
+      setDate((prev) => (prev < currentToday ? currentToday : prev));
+      if (!selectedDoctorId && doctors.length > 0) {
+        setSelectedDoctorId(doctors[0].id);
+      }
+    }
+  }, [isBookingOpen, doctors.length]);
 
   if (!isBookingOpen) return null;
 
@@ -116,6 +135,7 @@ export default function BookingModal() {
                   type="date"
                   className="form-input"
                   value={date}
+                  min={todayStr}
                   onChange={(e) => setDate(e.target.value)}
                   required
                 />
