@@ -25,7 +25,6 @@ class Settings(BaseSettings):
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin123"
     MINIO_BUCKET: str = "telemed-files"
-    MINIO_PUBLIC_HOST: str = "http://localhost:9000"
     MINIO_USE_SSL: bool = False
 
     model_config = SettingsConfigDict(

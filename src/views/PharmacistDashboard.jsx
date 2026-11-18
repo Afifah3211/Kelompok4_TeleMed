@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { 
   Pill, 
@@ -14,13 +14,15 @@ import {
   Plus,
   Minus,
   Truck,
-  Sparkles
+  Sparkles,
+  RefreshCw
 } from 'lucide-react';
 
 export default function PharmacistDashboard() {
   const { 
     currentUser, 
     prescriptions, 
+    refreshPrescriptions,
     updatePrescriptionStatus, 
     medicines, 
     updateMedicineStock,
@@ -31,6 +33,25 @@ export default function PharmacistDashboard() {
   const [filterStatus, setFilterStatus] = useState('Semua');
   const [selectedRx, setSelectedRx] = useState(prescriptions[0] || null);
   const [searchDrug, setSearchDrug] = useState('');
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') {
+        refreshPrescriptions().catch((error) => console.warn('Gagal memperbarui antrean resep:', error));
+      }
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 15000);
+    return () => window.clearInterval(timer);
+  }, [refreshPrescriptions]);
+
+  useEffect(() => {
+    if (prescriptions.length === 0) {
+      setSelectedRx(null);
+      return;
+    }
+    setSelectedRx((current) => prescriptions.find((rx) => rx.id === current?.id) || prescriptions[0]);
+  }, [prescriptions]);
 
   const filteredPrescriptions = prescriptions.filter((rx) => {
     if (filterStatus === 'Semua') return true;
@@ -104,6 +125,9 @@ export default function PharmacistDashboard() {
           <div className="pharma-list-col">
             <div className="filter-bar">
               <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Filter Status:</span>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => refreshPrescriptions().catch((error) => showToast(error.message || 'Gagal memperbarui antrean resep.', 'danger'))}>
+                <RefreshCw size={14} /> Segarkan
+              </button>
               <div className="filter-chips">
                 {['Semua', 'Menunggu', 'Diramu', 'Selesai'].map((st) => (
                   <button
@@ -195,7 +219,7 @@ export default function PharmacistDashboard() {
                     <span>{selectedRx.date}</span>
                   </div>
                   <div className="meta-box">
-                    <small>Catatan Medis Dokter</small>
+                    <small>Catatan Dokter untuk Apoteker</small>
                     <span className="text-muted">{selectedRx.notes || '-'}</span>
                   </div>
                 </div>
@@ -236,7 +260,7 @@ export default function PharmacistDashboard() {
                     <button
                       className="btn btn-outline"
                       onClick={() => updatePrescriptionStatus(selectedRx.id, 'Sedang Diramu', 'Obat sedang disiapkan di instalasi farmasi.')}
-                      disabled={selectedRx.status === 'Sedang Diramu'}
+                      disabled={selectedRx.status !== 'Menunggu Penyiapan'}
                     >
                       <Clock size={16} />
                       <span>Sedang Diramu</span>
@@ -245,10 +269,10 @@ export default function PharmacistDashboard() {
                     <button
                       className="btn btn-primary"
                       onClick={() => updatePrescriptionStatus(selectedRx.id, 'Selesai / Sudah Diambil', 'Obat telah diserahkan lengkap dengan etiket pemakaian.')}
-                      disabled={selectedRx.status === 'Selesai / Sudah Diambil'}
+                      disabled={selectedRx.status !== 'Sedang Diramu'}
                     >
                       <CheckCircle2 size={16} />
-                      <span>Selesai & Siap Diambil / Kirim</span>
+                      <span>Tandai Sudah Diserahkan</span>
                     </button>
                   </div>
                 </div>

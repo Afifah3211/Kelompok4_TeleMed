@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { isChatConsultation } from '../utils/consultation';
 import {
   Calendar,
   Clock,
@@ -16,11 +17,10 @@ import {
   Eye,
   AlertTriangle,
   Archive,
-  Plus,
-  Pill
+  MessageCircle,
+  Plus
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import FileUpload from '../components/FileUpload';
 
 const ICD10_PRESETS = [
   { code: 'I10', label: 'Hipertensi Primer Esensial' },
@@ -34,10 +34,9 @@ export default function DoctorEMR() {
   const {
     currentUser,
     appointments,
-    confirmAppointment,
+    medicines,
     updateAppointmentStatus,
     emrs,
-    medicines,
     saveEMR,
     softDeleteEMR,
     restoreEMR,
@@ -46,95 +45,51 @@ export default function DoctorEMR() {
     showToast
   } = useApp();
 
-  // Tab: 'emr-active' (split-screen today's consultation) or 'arsip' (EMR list & soft deleted records)
+  // Tab: examination queue or medical-record archive.
   const [currentView, setCurrentView] = useState('emr-active');
 
-  // Filter jadwal konsultasi dokter sesuai doctorId profil di DB
-  const myDoctorId = currentUser?.doctorId ?? currentUser?.id;
+  // The working queue contains only this doctor's consultations that still need action.
   const doctorAppointments = appointments.filter(
-    (a) => a.doctorId === myDoctorId || currentUser?.role === 'admin'
+    (appointment) =>
+      Number(appointment.doctorId) === Number(currentUser?.doctorId) &&
+      ['Menunggu', 'Sedang Berlangsung'].includes(appointment.status)
   );
 
   // Selected patient for active consultation (default to first active appointment)
-  const [selectedAppointmentId, setSelectedAppointmentId] = useState(
-    doctorAppointments[0]?.id || ''
-  );
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState('');
 
-  const selectedAppointment = doctorAppointments.find((a) => a.id === selectedAppointmentId) || doctorAppointments[0];
+  useEffect(() => {
+    if (!doctorAppointments.some((appointment) => appointment.id === selectedAppointmentId)) {
+      setSelectedAppointmentId(doctorAppointments[0]?.id || '');
+    }
+  }, [doctorAppointments, selectedAppointmentId]);
+
+  const selectedAppointment = doctorAppointments.find((a) => a.id === selectedAppointmentId);
 
   // Consultation Form state (PRD Spec: 'Keluhan', 'Diagnosis', 'Tindakan', 'Resep Obat')
   const [complaint, setComplaint] = useState(selectedAppointment?.complaint || '');
   const [diagnosis, setDiagnosis] = useState('');
   const [action, setAction] = useState('');
   const [prescriptionItems, setPrescriptionItems] = useState([]);
+  const [prescriptionNote, setPrescriptionNote] = useState('');
+  const [saving, setSaving] = useState(false);
   const [vitals, setVitals] = useState({
-    bp: '120/80 mmHg',
-    heartRate: '76 bpm',
-    temperature: '36.7 °C',
-    weight: '68 kg'
+    bp: '',
+    heartRate: '',
+    temperature: '',
+    weight: ''
   });
-
-  const DOSAGE_OPTIONS = [
-    '3 x 1 sehari sesudah makan',
-    '3 x 1 sehari sebelum makan',
-    '2 x 1 sehari sesudah makan',
-    '2 x 1 sehari sebelum makan',
-    '1 x 1 sehari pagi sesudah makan',
-    '1 x 1 sehari malam hari',
-    'Jika perlu (maks. 3 x 1 sehari)',
-    'Sesuai anjuran dokter'
-  ];
-
-  const handleAddPrescriptionItem = () => {
-    if (!medicines || medicines.length === 0) return;
-    const firstMed = medicines[0];
-    setPrescriptionItems((prev) => [
-      ...prev,
-      {
-        medicineId: firstMed.id,
-        medicineName: firstMed.name,
-        quantity: 1,
-        unit: firstMed.unit || 'Strip',
-        dosage: firstMed.dosage || DOSAGE_OPTIONS[0]
-      }
-    ]);
-  };
-
-  const handleRemovePrescriptionItem = (idx) => {
-    setPrescriptionItems((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const handlePrescriptionItemChange = (idx, field, value) => {
-    setPrescriptionItems((prev) =>
-      prev.map((item, i) => {
-        if (i !== idx) return item;
-        if (field === 'medicineId') {
-          const med = (medicines || []).find((m) => String(m.id) === String(value));
-          return {
-            ...item,
-            medicineId: med ? med.id : value,
-            medicineName: med ? med.name : item.medicineName,
-            unit: med?.unit || 'Strip',
-            dosage: med?.dosage || item.dosage
-          };
-        }
-        return { ...item, [field]: value };
-      })
-    );
-  };
 
   useEffect(() => {
     if (selectedAppointment) {
       setComplaint(selectedAppointment.complaint || '');
+      setDiagnosis('');
+      setAction('');
+      setPrescriptionItems([]);
+      setPrescriptionNote('');
+      setVitals({ bp: '', heartRate: '', temperature: '', weight: '' });
     }
   }, [selectedAppointment?.id]);
-
-  // State untuk lampiran file (CDN upload - Pertemuan 5)
-  const [attachments, setAttachments] = useState([]);
-  const handleFileUploaded = (fileData) => {
-    setAttachments((prev) => [...prev, fileData]);
-    showToast('Lampiran berhasil diupload ke CDN', 'success');
-  };
 
   // When changing selected patient, update complaint template
   const handleSelectAppointment = (apt) => {
@@ -143,11 +98,12 @@ export default function DoctorEMR() {
     setDiagnosis('');
     setAction('');
     setPrescriptionItems([]);
-    setAttachments([]);
+    setPrescriptionNote('');
+    setVitals({ bp: '', heartRate: '', temperature: '', weight: '' });
   };
 
   // Submit active consultation form
-  const handleSaveEMR = (e) => {
+  const handleSaveEMR = async (e) => {
     e.preventDefault();
 
     if (!selectedAppointment) {
@@ -159,52 +115,39 @@ export default function DoctorEMR() {
       return;
     }
 
-    let finalAction = action.trim() || 'Edukasi istirahat cukup dan pola makan sehat.';
-    if (attachments.length > 0) {
-      finalAction += '\n\n[Lampiran Dokumen CDN]:\n' + attachments.map(a => `- ${a.filename}: ${a.cdn_url}`).join('\n');
+    const completedItems = prescriptionItems.map((item) => ({
+      ...item,
+      medicineId: Number(item.medicineId),
+      quantity: Number(item.quantity),
+      dosage: item.dosage.trim(),
+    }));
+    if (completedItems.some((item) => !item.medicineId || !item.quantity || !item.dosage)) {
+      alert('Lengkapi obat, jumlah, dan aturan pakai pada setiap item resep.');
+      return;
     }
 
-    const formattedPrescriptionItems = prescriptionItems
-      .filter((it) => it.medicineId && it.medicineName)
-      .map((it) => ({
-        medicineId: it.medicineId,
-        medicineName: it.medicineName,
-        quantity: `${it.quantity || 1} ${it.unit || 'Strip'}`,
-        dosage: it.dosage || 'Sesuai anjuran dokter'
-      }));
-
-    const prescriptionSummary = formattedPrescriptionItems.length > 0
-      ? formattedPrescriptionItems.map((it) => `${it.medicineName} (${it.quantity}) - ${it.dosage}`).join('\n')
-      : 'Tidak ada resep obat (terapi suportif).';
-
-    saveEMR({
-      appointmentId: selectedAppointment.id,
-      patientId: selectedAppointment.patientId,
-      patientName: selectedAppointment.patientName,
-      patientNik: selectedAppointment.patientNik,
-      patientGender: selectedAppointment.patientGender || 'Laki-laki',
-      patientAge: selectedAppointment.patientAge || '35 thn',
-      complaint: complaint.trim(),
-      diagnosis: diagnosis.trim(),
-      action: finalAction,
-      prescription: prescriptionSummary,
-      prescriptionItems: formattedPrescriptionItems,
-      vitals
-    });
-
+    setSaving(true);
     try {
-      confetti({
-        particleCount: 50,
-        spread: 60,
-        origin: { y: 0.7 }
+      await saveEMR({
+        appointmentId: selectedAppointment.id,
+        patientId: selectedAppointment.patientId,
+        patientName: selectedAppointment.patientName,
+        patientNik: selectedAppointment.patientNik,
+        complaint: complaint.trim(),
+        diagnosis: diagnosis.trim(),
+        action: action.trim(),
+        prescriptionItems: completedItems,
+        prescriptionNote: prescriptionNote.trim(),
+        vitals
       });
-    } catch (err) { }
-
-    // Reset form for next patient
-    setDiagnosis('');
-    setAction('');
-    setPrescriptionItems([]);
-    setAttachments([]);
+      try {
+        confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+      } catch (err) { }
+    } catch (error) {
+      console.error('Gagal menyimpan rekam medis:', error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Preset ICD-10 quick filler
@@ -253,7 +196,7 @@ export default function DoctorEMR() {
           </div>
         </div>
 
-        {/* View Switcher: Split-Screen Consultation vs Arsip Rekam Medis vs CDN Storage */}
+        {/* View Switcher: consultation queue and medical-record archive */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button
             className={`btn btn-sm ${currentView === 'emr-active' ? 'btn-primary' : 'btn-outline'}`}
@@ -270,6 +213,7 @@ export default function DoctorEMR() {
             <Archive size={16} />
             <span>Semua Rekam Medis & Arsip Soft Delete ({emrs.length})</span>
           </button>
+
         </div>
       </div>
 
@@ -287,18 +231,22 @@ export default function DoctorEMR() {
               <div>
                 <h2 className="card-title" style={{ fontSize: '1.05rem' }}>
                   <Calendar size={18} color="#0F766E" />
-                  Jadwal Hari Ini
+                  Antrean Konsultasi
                 </h2>
                 <p style={{ fontSize: '0.78rem', color: '#64748B' }}>
-                  Daftar antrean konsultasi pasien hari ini
+                  Konsultasi aktif yang ditugaskan kepada Anda
                 </p>
               </div>
               <span className="badge badge-accent" style={{ color: '#0F766E' }}>
-                {doctorAppointments.length} Pasien
+                {doctorAppointments.length} Konsultasi
               </span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {doctorAppointments.length === 0 ? (
+              <div style={{ padding: '24px 12px', textAlign: 'center', color: '#64748B', fontSize: '0.88rem' }}>
+                Tidak ada konsultasi aktif. Konsultasi selesai dapat dilihat di arsip rekam medis.
+              </div>
+            ) : <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {doctorAppointments.map((apt) => {
                 const isSelected = selectedAppointment?.id === apt.id;
                 return (
@@ -348,7 +296,7 @@ export default function DoctorEMR() {
                   </div>
                 );
               })}
-            </div>
+            </div>}
           </div>
 
           {/* Right Column: Active Consultation Form (PRD Prompt Halaman 3) */}
@@ -391,7 +339,7 @@ export default function DoctorEMR() {
                         {selectedAppointment.patientName}
                       </div>
                       <div style={{ fontSize: '0.8rem', color: '#64748B' }}>
-                        NIK: {selectedAppointment.patientNik} • Usia: {selectedAppointment.patientAge || '35 thn'} • Gender: {selectedAppointment.patientGender || 'Laki-laki'}
+                        NIK: {selectedAppointment.patientNik}{selectedAppointment.patientAge ? ` | Usia: ${selectedAppointment.patientAge} thn` : '}{selectedAppointment.patientGender ? ` | Gender: ${selectedAppointment.patientGender}` : '}
                       </div>
                     </div>
                   </div>
@@ -402,21 +350,9 @@ export default function DoctorEMR() {
                         type="button"
                         className="btn btn-sm"
                         style={{ background: '#0F766E', color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}
-                        onClick={() => confirmAppointment(selectedAppointment.id, 'Dikonfirmasi')}
+                        onClick={() => updateAppointmentStatus(selectedAppointment.id, 'Sedang Berlangsung')}
                       >
                         <CheckCircle2 size={15} />
-                        <span>Konfirmasi Jadwal</span>
-                      </button>
-                    )}
-
-                    {selectedAppointment.status === 'Dikonfirmasi' && (
-                      <button
-                        type="button"
-                        className="btn btn-sm"
-                        style={{ background: '#2563EB', color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}
-                        onClick={() => confirmAppointment(selectedAppointment.id, 'Sedang Berlangsung')}
-                      >
-                        <Clock size={15} />
                         <span>Mulai Konsultasi</span>
                       </button>
                     )}
@@ -427,8 +363,8 @@ export default function DoctorEMR() {
                       onClick={() => setTeleconsultationSession(selectedAppointment)}
                       style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
                     >
-                      <Video size={15} />
-                      <span>Telekonsultasi Room</span>
+                      {isChatConsultation(selectedAppointment.type) ? <MessageCircle size={15} /> : <Video size={15} />}
+                      <span>{isChatConsultation(selectedAppointment.type) ? 'Buka Chat Konsultasi' : 'Buka Ruang Video'}</span>
                     </button>
                   </div>
                 </div>
@@ -544,117 +480,37 @@ export default function DoctorEMR() {
                   />
                 </div>
 
-                {/* Lampiran File - CDN Upload (Pertemuan 5) */}
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                  <FileUpload
-                    label="📎 Lampiran Dokumen / Foto (opsional)"
-                    onUploaded={handleFileUploaded}
-                    accept="image/*,application/pdf,text/plain"
-                  />
-                  {attachments.length > 0 && (
-                    <div style={{ marginTop: '8px', fontSize: '0.78rem', color: '#6B7280' }}>
-                      <strong>{attachments.length} lampiran terlampir:</strong>{' '}
-                      {attachments.map((a, i) => (
-                        <span key={i}>
-                          <a href={a.cdn_url} target="_blank" rel="noopener noreferrer" style={{ color: '#3B82F6' }}>
-                            {a.filename}
-                          </a>
-                          {i < attachments.length - 1 ? ', ' : ''}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {/* 4. Dropdown Resep Obat Elektronik (Sinkron Database Obat & Apoteker) */}
+                {/* Structured e-prescription linked to the pharmacy catalog */}
                 <div className="form-group">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <label className="form-label" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Pill size={15} color="#0F766E" />
-                      <span>Resep Obat Elektronik (e-Prescription)</span>
-                    </label>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline"
-                      onClick={handleAddPrescriptionItem}
-                      disabled={!medicines || medicines.length === 0}
-                      style={{ padding: '4px 10px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '4px', color: '#0F766E', borderColor: '#0F766E' }}
-                    >
-                      <Plus size={14} />
-                      <span>Tambah Obat</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                    <label className="form-label" style={{ margin: 0 }}>Resep Elektronik untuk Apoteker (opsional)</label>
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => setPrescriptionItems((items) => [...items, { medicineId: '', quantity: 1, dosage: '' }])} disabled={medicines.length === 0}>
+                      <Plus size={15} /> Tambah Obat
                     </button>
                   </div>
-
-                  {prescriptionItems.length === 0 ? (
-                    <div style={{ padding: '14px', background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: '8px', fontSize: '0.82rem', color: '#64748B', textAlign: 'center' }}>
-                      Belum ada obat dipilih. Klik <strong>"+ Tambah Obat"</strong> untuk meresepkan obat dari database farmasi (otomatis diteruskan ke Apoteker).
+                  <p style={{ color: '#64748B', fontSize: 12, margin: '0 0 10px' }}>
+                    Jika resep diterbitkan, obat dipilih dari katalog agar nama dan stok cocok dengan data farmasi. Tanpa item resep, rekam medis tetap tersimpan tanpa masuk antrean apoteker.
+                  </p>
+                  {medicines.length === 0 && <p style={{ color: '#B45309', fontSize: 12 }}>Katalog obat belum tersedia; minta apoteker mengisi inventori terlebih dahulu.</p>}
+                  {prescriptionItems.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1.4fr) 110px minmax(200px, 1.5fr) auto', gap: 8, marginBottom: 5, color: '#64748B', fontSize: 11 }}>
+                      <span>Obat dari katalog</span><span>Jumlah unit</span><span>Aturan pakai / dosis</span><span />
                     </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {prescriptionItems.map((item, idx) => (
-                        <div
-                          key={idx}
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: '2fr 100px 2fr auto',
-                            gap: '8px',
-                            alignItems: 'center',
-                            padding: '10px',
-                            background: '#F8FAFC',
-                            border: '1px solid #E2E8F0',
-                            borderRadius: '8px'
-                          }}
-                        >
-                          <select
-                            className="form-select"
-                            value={item.medicineId}
-                            onChange={(e) => handlePrescriptionItemChange(idx, 'medicineId', e.target.value)}
-                            style={{ fontSize: '0.82rem' }}
-                          >
-                            {(medicines || []).map((med) => (
-                              <option key={med.id} value={med.id}>
-                                {med.name} (Stok: {med.stock} {med.unit || ''})
-                              </option>
-                            ))}
-                          </select>
-
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                            <input
-                              type="number"
-                              min="1"
-                              className="form-input"
-                              value={item.quantity}
-                              onChange={(e) => handlePrescriptionItemChange(idx, 'quantity', e.target.value)}
-                              style={{ fontSize: '0.82rem', padding: '6px 8px' }}
-                              title="Jumlah Obat"
-                            />
-                          </div>
-
-                          <select
-                            className="form-select"
-                            value={item.dosage}
-                            onChange={(e) => handlePrescriptionItemChange(idx, 'dosage', e.target.value)}
-                            style={{ fontSize: '0.82rem' }}
-                          >
-                            {DOSAGE_OPTIONS.map((opt) => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                            {!DOSAGE_OPTIONS.includes(item.dosage) && item.dosage && (
-                              <option value={item.dosage}>{item.dosage}</option>
-                            )}
-                          </select>
-
-                          <button
-                            type="button"
-                            className="btn btn-sm btn-danger-outline"
-                            onClick={() => handleRemovePrescriptionItem(idx)}
-                            style={{ padding: '6px 8px' }}
-                            title="Hapus item obat"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
+                  )}
+                  {prescriptionItems.map((item, index) => (
+                    <div key={index} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1.4fr) 110px minmax(200px, 1.5fr) auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                      <select className="form-select" value={item.medicineId} required onChange={(event) => setPrescriptionItems((items) => items.map((row, rowIndex) => rowIndex === index ? { ...row, medicineId: event.target.value } : row))}>
+                        <option value="">Pilih obat katalog</option>
+                        {medicines.map((medicine) => <option key={medicine.id} value={medicine.id}>{medicine.name} — stok {medicine.stock} {medicine.unit}</option>)}
+                      </select>
+                      <input className="form-input" type="number" min="1" step="1" required aria-label="Jumlah unit stok" value={item.quantity} onChange={(event) => setPrescriptionItems((items) => items.map((row, rowIndex) => rowIndex === index ? { ...row, quantity: event.target.value } : row))} />
+                      <input className="form-input" type="text" maxLength={500} required placeholder="Aturan pakai / dosis" value={item.dosage} onChange={(event) => setPrescriptionItems((items) => items.map((row, rowIndex) => rowIndex === index ? { ...row, dosage: event.target.value } : row))} />
+                      <button type="button" className="btn btn-outline btn-sm" aria-label="Hapus item resep" onClick={() => setPrescriptionItems((items) => items.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={15} /></button>
+                      {item.medicineId && <small style={{ gridColumn: '1 / -1', color: '#64748B' }}>Jumlah dihitung dalam unit stok: {medicines.find((medicine) => Number(medicine.id) === Number(item.medicineId))?.unit || 'unit'}.</small>}
                     </div>
+                  ))}
+                  {prescriptionItems.length > 0 && (
+                    <textarea className="form-textarea" maxLength={1000} placeholder="Catatan dokter untuk apoteker (opsional), misalnya substitusi tidak diperbolehkan." value={prescriptionNote} onChange={(event) => setPrescriptionNote(event.target.value)} />
                   )}
                 </div>
 
@@ -663,6 +519,7 @@ export default function DoctorEMR() {
                   <button
                     type="submit"
                     className="btn btn-primary btn-lg"
+                    disabled={saving}
                     style={{
                       backgroundColor: '#1D4ED8',
                       boxShadow: '0 4px 14px rgba(29, 78, 216, 0.3)',
@@ -670,7 +527,7 @@ export default function DoctorEMR() {
                     }}
                   >
                     <Save size={18} />
-                    <span>Simpan Rekam Medis</span>
+                    <span>{saving ? 'Menyimpan…' : 'Simpan Rekam Medis'}</span>
                   </button>
                 </div>
               </form>
@@ -702,6 +559,9 @@ export default function DoctorEMR() {
             </div>
           </div>
 
+          {/* Banner Akses Cepat CDN Pertemuan 5 */}
+
+
           <div className="table-container">
             <table className="data-table">
               <thead>
@@ -711,6 +571,7 @@ export default function DoctorEMR() {
                   <th>Nama Pasien</th>
                   <th>Diagnosis</th>
                   <th>Dokter Pemeriksa</th>
+                  <th>Status Keamanan Data</th>
                   <th style={{ textAlign: 'right' }}>Aksi</th>
                 </tr>
               </thead>
@@ -729,13 +590,24 @@ export default function DoctorEMR() {
                     </td>
                     <td>
                       <span className="badge badge-accent">{item.diagnosis}</span>
-                      {item.isDeleted && (
-                        <div style={{ fontSize: '0.72rem', color: '#DC2626', marginTop: '3px', fontWeight: 600 }}>
-                          Terhapus (Soft Delete)
-                        </div>
-                      )}
                     </td>
                     <td>{item.doctorName}</td>
+                    <td>
+                      {item.isDeleted ? (
+                        <div>
+                          <span className="badge badge-danger">
+                            <AlertTriangle size={12} /> Terhapus (Soft Delete)
+                          </span>
+                          <div style={{ fontSize: '0.72rem', color: '#DC2626', marginTop: '3px' }}>
+                            {item.deletedAt}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="badge badge-selesai">
+                          <CheckCircle2 size={12} /> Aktif & Terverifikasi
+                        </span>
+                      )}
+                    </td>
                     <td style={{ textAlign: 'right' }}>
                       <div style={{ display: 'inline-flex', gap: '6px' }}>
                         <button
@@ -775,6 +647,7 @@ export default function DoctorEMR() {
           </div>
         </div>
       )}
+
     </div>
   );
 }

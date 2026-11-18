@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Calendar, Clock, Stethoscope, Video, MessageCircle, X, CheckCircle2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -20,18 +20,26 @@ export default function BookingModal() {
   const [selectedDoctorId, setSelectedDoctorId] = useState(doctors[0]?.id || '');
   const [date, setDate] = useState(todayStr);
   const [time, setTime] = useState('13:30 WIB');
-  const [type, setType] = useState('Video Telekonsultasi');
+  const [type, setType] = useState('');
   const [complaint, setComplaint] = useState('');
 
   useEffect(() => {
     if (isBookingOpen) {
       const currentToday = getTodayLocalDate();
       setDate((prev) => (prev < currentToday ? currentToday : prev));
-      if (!selectedDoctorId && doctors.length > 0) {
-        setSelectedDoctorId(doctors[0].id);
-      }
     }
-  }, [isBookingOpen, doctors.length]);
+  }, [isBookingOpen]);
+
+  useEffect(() => {
+    if (!selectedDoctorId && doctors.length > 0) setSelectedDoctorId(doctors[0].id);
+  }, [doctors, selectedDoctorId]);
+
+  useEffect(() => {
+    if (isBookingOpen) {
+      setType('');
+      setComplaint('');
+    }
+  }, [isBookingOpen]);
 
   if (!isBookingOpen) return null;
 
@@ -41,8 +49,16 @@ export default function BookingModal() {
       alert('Harap tuliskan keluhan awal Anda.');
       return;
     }
+    if (!type) {
+      alert('Pilih metode konsultasi Chat atau Video Call.');
+      return;
+    }
 
     const doctor = doctors.find((d) => d.id === selectedDoctorId) || doctors[0];
+    if (!doctor) {
+      alert('Dokter belum tersedia. Coba muat ulang halaman.');
+      return;
+    }
 
     addAppointment({
       doctorId: doctor.id,
@@ -164,8 +180,8 @@ export default function BookingModal() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <label 
                   style={{
-                    border: `1.5px solid ${type === 'Video Telekonsultasi' ? '#1D4ED8' : '#E2E8F0'}`,
-                    background: type === 'Video Telekonsultasi' ? '#EFF6FF' : '#FFF',
+                    border: `1.5px solid ${type === 'Video Call' ? '#1D4ED8' : '#E2E8F0'}`,
+                    background: type === 'Video Call' ? '#EFF6FF' : '#FFF',
                     padding: '10px',
                     borderRadius: '8px',
                     display: 'flex',
@@ -179,8 +195,10 @@ export default function BookingModal() {
                   <input
                     type="radio"
                     name="consultationType"
-                    checked={type === 'Video Telekonsultasi'}
-                    onChange={() => setType('Video Telekonsultasi')}
+                    value="Video Call"
+                    required
+                    checked={type === 'Video Call'}
+                    onChange={() => setType('Video Call')}
                     style={{ accentColor: '#1D4ED8' }}
                   />
                   <Video size={16} color="#1D4ED8" />
@@ -189,8 +207,8 @@ export default function BookingModal() {
 
                 <label 
                   style={{
-                    border: `1.5px solid ${type === 'Konsultasi Online' ? '#1D4ED8' : '#E2E8F0'}`,
-                    background: type === 'Konsultasi Online' ? '#EFF6FF' : '#FFF',
+                    border: `1.5px solid ${type === 'Chat' ? '#1D4ED8' : '#E2E8F0'}`,
+                    background: type === 'Chat' ? '#EFF6FF' : '#FFF',
                     padding: '10px',
                     borderRadius: '8px',
                     display: 'flex',
@@ -204,12 +222,14 @@ export default function BookingModal() {
                   <input
                     type="radio"
                     name="consultationType"
-                    checked={type === 'Konsultasi Online'}
-                    onChange={() => setType('Konsultasi Online')}
+                    value="Chat"
+                    required
+                    checked={type === 'Chat'}
+                    onChange={() => setType('Chat')}
                     style={{ accentColor: '#1D4ED8' }}
                   />
                   <MessageCircle size={16} color="#0F766E" />
-                  <span>Chat & Telemedis</span>
+                  <span>Chat konsultasi</span>
                 </label>
               </div>
             </div>

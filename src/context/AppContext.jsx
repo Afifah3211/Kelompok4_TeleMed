@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { normalizeConsultationType } from '../utils/consultation';
 import { 
   authApi, 
   usersApi, 
@@ -46,10 +47,10 @@ function buildCurrentUser(user, profile) {
     nik: p.nik || '',
     phone: p.phone || '',
     birthDate: p.birth_date || '',
-    gender: p.gender || 'Laki-laki',
+    gender: p.gender || '',
     address: p.address || '',
-    bloodType: p.blood_type || 'O+',
-    allergies: p.allergies || 'Tidak Ada',
+    bloodType: p.blood_type || '',
+    allergies: p.allergies || '',
     specialization: p.specialization || '',
     specialty: p.specialization || (role === 'dokter' ? 'Dokter Spesialis' : ''),
     strNumber: p.str_number || '',
@@ -66,13 +67,22 @@ function buildCurrentUser(user, profile) {
 }
 
 // Normalisasi data Konsultasi
+function calculateAge(birthDateValue) {
+  if (!birthDateValue) return '';
+  const birthDate = new Date(birthDateValue);
+  if (Number.isNaN(birthDate.getTime())) return '';
+  const today = new Date();
+  return String(today.getFullYear() - birthDate.getUTCFullYear() - (
+    today < new Date(today.getFullYear(), birthDate.getUTCMonth(), birthDate.getUTCDate()) ? 1 : 0
+  ));
+}
+
 function normalizeConsultation(c) {
   const sched = c.scheduled_at ? new Date(c.scheduled_at) : new Date();
   const dateStr = c.scheduled_at ? c.scheduled_at.slice(0, 10) : '';
   const timeStr = c.scheduled_at 
     ? `${String(sched.getHours()).padStart(2, '0')}:${String(sched.getMinutes()).padStart(2, '0')} WIB`
     : '09:00 WIB';
-
   return {
     ...c,
     id: c.id,
@@ -80,13 +90,13 @@ function normalizeConsultation(c) {
     patientName: c.patient_name || 'Pasien',
     patientNik: c.patient_nik || '',
     patientPhone: c.patient_phone || '',
-    patientGender: 'Laki-laki',
-    patientAge: '35 thn',
+    patientGender: c.patient_gender === 'L' ? 'Laki-laki' : c.patient_gender === 'P' ? 'Perempuan' : '',
+    patientAge: calculateAge(c.patient_birth_date),
     doctorId: c.doctor_id,
     doctorName: c.doctor_name || 'Dokter',
     specialty: c.doctor_specialization || 'Spesialis',
     status: c.status,
-    type: c.type || 'Video Telekonsultasi',
+    type: normalizeConsultationType(c.type),
     complaint: c.complaint || '',
     date: dateStr,
     time: timeStr,
@@ -105,26 +115,26 @@ function normalizeEMR(e) {
     patientId: e.patient_id,
     patientName: e.patient_name || 'Pasien',
     patientNik: e.patient_nik || '',
-    patientGender: 'Laki-laki',
-    patientAge: '35 thn',
+    patientGender: e.patient_gender === 'L' ? 'Laki-laki' : e.patient_gender === 'P' ? 'Perempuan' : '',
+    patientAge: calculateAge(e.patient_birth_date),
     doctorId: e.doctor_id,
     doctorName: e.doctor_name || 'Dokter',
-    doctorSip: '446/MED/2026',
+    doctorSip: e.doctor_sip || '',
     date: dateStr,
     diagnosis: e.diagnosis || '',
     complaint: e.complaint || '',
     treatment: e.treatment || '',
-    action: e.treatment || 'Edukasi istirahat cukup dan pola makan sehat.',
-    prescription: e.prescription || 'Tidak ada resep obat (terapi suportif).',
+    action: e.treatment || '',
+    prescription: e.prescription || '',
     isDeleted: !!e.is_deleted,
     deletedAt: e.deleted_at ? String(e.deleted_at) : null,
     deletedBy: e.deleted_by || null,
     vitals: {
-      bp: e.vital_bp || '120/80 mmHg',
-      heartRate: e.vital_heart_rate || '76 bpm',
-      temperature: e.vital_temperature || '36.7 °C',
-      weight: e.vital_weight || '68 kg',
-      respRate: e.vital_resp_rate || '18 x/menit',
+      bp: e.vital_bp || '',
+      heartRate: e.vital_heart_rate || '',
+      temperature: e.vital_temperature || '',
+      weight: e.vital_weight || '',
+      respRate: e.vital_resp_rate || '',
     },
   };
 }
@@ -220,6 +230,13 @@ export function AppProvider({ children }) {
     }, 4500);
   }, []);
 
+  const refreshPrescriptions = useCallback(async () => {
+    const rxList = await prescriptionsApi.getAll();
+    const normalized = (rxList || []).map(normalizePrescription);
+    setPrescriptions(normalized);
+    return normalized;
+  }, []);
+
   // Memuat data role-specific dari FastAPI backend
   const loadInitialData = useCallback(async (role) => {
     try {
@@ -286,8 +303,7 @@ export function AppProvider({ children }) {
       }
 
       // 6. Resep Digital (pasien, dokter, admin, apoteker)
-      const rxList = await prescriptionsApi.getAll();
-      setPrescriptions((rxList || []).map(normalizePrescription));
+      await refreshPrescriptions();
 
       // 7. Audit Logs & Backup (khusus admin)
       if (role === 'admin') {
@@ -302,20 +318,16 @@ export function AppProvider({ children }) {
               policyName: bData.config.policy_name || prev.policyName,
               rtoTarget: bData.config.rto_target || prev.rtoTarget,
               rpoTarget: bData.config.rpo_target || prev.rpoTarget,
-              encryption: bData.config.encryption || 'AES-256-GCM (Offsite & Dump)',
-              retention: bData.config.retention || '24 Jam Bergulir / 30 Hari Arsip',
               lastBackup: bData.recent_runs && bData.recent_runs.length > 0
                 ? String(bData.recent_runs[0].started_at).slice(0, 19).replace('T', ' ') + ' WIB'
                 : prev.lastBackup,
-              recentRuns: bData.recent_runs || [],
               storageNodes: (bData.nodes && bData.nodes.length > 0)
                 ? bData.nodes.map((n) => ({
-                    type: n.type || n.node_name || 'Storage Node',
-                    copy: n.copy_label || n.node_type || 'Salinan',
-                    status: n.status || 'Optimal',
-                    location: n.location || n.storage_path || '-',
-                    size: n.size || (n.size_bytes ? `${(n.size_bytes / (1024 * 1024)).toFixed(2)} MB` : '24.8 MB'),
-                    latency: n.latency || '< 5 ms'
+                    type: n.node_name,
+                    copy: n.node_type,
+                    status: n.status,
+                    path: n.storage_path,
+                    size: n.size_bytes ? `${(n.size_bytes / (1024 * 1024)).toFixed(2)} MB` : '18.2 MB'
                   }))
                 : prev.storageNodes
             }));
@@ -327,7 +339,7 @@ export function AppProvider({ children }) {
     } catch (err) {
       console.warn('Error loading initial data from backend:', err);
     }
-  }, []);
+  }, [refreshPrescriptions]);
 
   // Inisialisasi Auth pada mount dengan token dari sessionStorage
   useEffect(() => {
@@ -475,7 +487,6 @@ export function AppProvider({ children }) {
     clearToken();
     setCurrentUser(null);
     setCurrentPage('landing');
-    setUsers([]);
     setAppointments([]);
     setEmrs([]);
     setAuditLogs([]);
@@ -516,7 +527,7 @@ export function AppProvider({ children }) {
       const created = await consultationsApi.create({
         doctor_id: parseInt(appointmentData.doctorId || appointmentData.doctor_id, 10),
         scheduled_at: scheduledIso,
-        type: appointmentData.type || 'Video Telekonsultasi',
+        type: normalizeConsultationType(appointmentData.type),
         complaint: appointmentData.complaint,
         notes: appointmentData.notes || `Pasien: ${currentUser?.name || ''}`
       });
@@ -554,7 +565,7 @@ export function AppProvider({ children }) {
     }
   };
 
-  // Save new EMR & generate prescription if needed (Dokter)
+  // Persist EMR and its e-prescription in one backend transaction.
   const saveEMR = async (emrData) => {
     try {
       const consultationId = emrData.appointmentId ? parseInt(emrData.appointmentId, 10) : null;
@@ -566,7 +577,8 @@ export function AppProvider({ children }) {
         complaint: emrData.complaint,
         diagnosis: emrData.diagnosis,
         treatment: emrData.action,
-        prescription: emrData.prescription,
+        prescription_items: emrData.prescriptionItems || [],
+        prescription_note: emrData.prescriptionNote || null,
         vital_bp: emrData.vitals?.bp,
         vital_heart_rate: emrData.vitals?.heartRate,
         vital_temperature: emrData.vitals?.temperature,
@@ -577,40 +589,30 @@ export function AppProvider({ children }) {
       const normalizedEMR = normalizeEMR(recordRes);
       setEmrs((prev) => [normalizedEMR, ...prev]);
 
-      // Buat Resep Digital terstruktur jika dokter memilih item obat
-      if (Array.isArray(emrData.prescriptionItems) && emrData.prescriptionItems.length > 0) {
+      if (consultationId) {
+        setAppointments((prev) =>
+          prev.map((appointment) =>
+            appointment.id === consultationId
+              ? { ...appointment, status: 'Selesai' }
+              : appointment
+          )
+        );
+      }
+
+      if (recordRes.prescription_id) {
         try {
-          const rxRes = await prescriptionsApi.create({
-            patient_id: patientId,
-            medical_record_id: recordRes.id,
-            consultation_id: consultationId,
-            notes: `Diagnosis: ${emrData.diagnosis}`,
-            items: emrData.prescriptionItems.map((it) => ({
-              medicine_id: it.medicineId ? parseInt(it.medicineId, 10) : null,
-              medicine_name: it.medicineName,
-              quantity: String(it.quantity),
-              dosage: it.dosage,
-            })),
-          });
-          const normalizedRx = normalizePrescription(rxRes);
-          setPrescriptions((prev) => [normalizedRx, ...prev]);
-        } catch (rxErr) {
-          console.warn('Gagal meneruskan resep digital otomatis:', rxErr);
-          showToast('EMR tersimpan, namun gagal meneruskan resep ke apoteker.', 'warning');
+          await refreshPrescriptions();
+        } catch (refreshError) {
+          console.warn('Resep sudah tersimpan, tetapi daftar lokal gagal diperbarui:', refreshError);
         }
       }
 
-      // Update status konsultasi menjadi 'Selesai'
-      if (consultationId) {
-        try {
-          await consultationsApi.updateStatus(consultationId, 'Selesai');
-          setAppointments((prev) =>
-            prev.map((a) => (a.id === consultationId ? { ...a, status: 'Selesai' } : a))
-          );
-        } catch (_) {}
-      }
-
-      showToast(`Rekam Medis #${recordRes.id} dan resep berhasil diterbitkan!`, 'success');
+      showToast(
+        recordRes.prescription_id
+          ? `Rekam Medis #${recordRes.id} tersimpan dan resep #${recordRes.prescription_id} masuk antrean apoteker.`
+          : `Rekam Medis #${recordRes.id} tersimpan tanpa resep obat.`,
+        'success'
+      );
       return normalizedEMR;
     } catch (err) {
       showToast(err.message || 'Gagal menyimpan Rekam Medis (EMR).', 'danger');
@@ -651,8 +653,18 @@ export function AppProvider({ children }) {
         pharmacist_notes: pharmacistNotes || `Status diperbarui menjadi ${newStatus} oleh apoteker.`
       });
 
-      const normalized = normalizePrescription(updated);
-      setPrescriptions((prev) => prev.map((rx) => (rx.id === rxId ? normalized : rx)));
+      setPrescriptions((prev) => prev.map((rx) => rx.id === rxId
+        ? {
+            ...rx,
+            status: updated.status,
+            pharmacistNotes: updated.pharmacist_notes ?? rx.pharmacistNotes,
+          }
+        : rx));
+      try {
+        await refreshPrescriptions();
+      } catch (refreshError) {
+        console.warn('Status resep berhasil diperbarui; daftar lengkap gagal disegarkan:', refreshError);
+      }
 
       // Jika selesai, refresh obat karena stok berkurang di server
       if (newStatus === 'Selesai / Sudah Diambil') {
@@ -860,6 +872,7 @@ export function AppProvider({ children }) {
         // Pharmacy & Medicines
         medicines,
         prescriptions,
+        refreshPrescriptions,
         updatePrescriptionStatus,
         updateMedicineStock,
 

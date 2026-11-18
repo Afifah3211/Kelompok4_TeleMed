@@ -91,8 +91,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    ports:
-      - "127.0.0.1:5433:5432"
+    expose:
+      - "5432"
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -153,19 +153,19 @@ services:
   # SERVICE 5: MinIO / Silo (File Storage / CDN Node Lokal)
   # Pertemuan 5: File Management & Content Delivery Network
   # Menggunakan pgsty/silo (drop-in open-source fork MinIO di Docker Hub)
-  # S3 API  → port 9000 (internal & host)
-  # Console → port 9001 (admin web UI)
+  # S3 API  → port 9000 (internal Compose only)
+  # Console → port 9001 (internal; loopback in dev override)
   # ==========================================================
   minio:
     image: pgsty/silo:latest
     restart: unless-stopped
     command: server /data --console-address ":9001"
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+    expose:
+      - "9000"
+      - "9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin123}
     volumes:
       - minio_data:/data
     networks:

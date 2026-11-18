@@ -9,6 +9,14 @@ from app.security import get_current_user, require_roles
 router = APIRouter()
 
 
+class PrescriptionItemInput(BaseModel):
+    medicine_id: int = Field(..., alias="medicineId")
+    quantity: int = Field(..., ge=1, le=10000)
+    dosage: str = Field(..., min_length=1, max_length=500)
+
+    model_config = {"populate_by_name": True}
+
+
 class CreateMedicalRecordRequest(BaseModel):
     patient_id: int
     consultation_id: Optional[int] = None
@@ -16,6 +24,8 @@ class CreateMedicalRecordRequest(BaseModel):
     diagnosis: str
     treatment: Optional[str] = None
     prescription: Optional[str] = None
+    prescription_note: Optional[str] = Field(None, alias="prescriptionNote")
+    prescription_items: list[PrescriptionItemInput] = Field(default_factory=list, alias="prescriptionItems")
     vital_bp: Optional[str] = Field(None, alias="vitalBp")
     vital_heart_rate: Optional[str] = Field(None, alias="vitalHeartRate")
     vital_temperature: Optional[str] = Field(None, alias="vitalTemperature")
@@ -73,8 +83,11 @@ async def list_medical_records(
         SELECT mr.*,
                p.full_name AS patient_name,
                p.nik AS patient_nik,
+               p.birth_date AS patient_birth_date,
+               p.gender AS patient_gender,
                d.full_name AS doctor_name,
-               d.specialization AS doctor_specialization
+               d.specialization AS doctor_specialization,
+               d.str_number AS doctor_sip
         FROM medical_records mr
         JOIN patients p ON p.id = mr.patient_id
         JOIN doctors d ON d.id = mr.doctor_id
@@ -97,8 +110,11 @@ async def list_deleted_records(
             SELECT mr.*,
                    p.full_name AS patient_name,
                    p.nik AS patient_nik,
+                   p.birth_date AS patient_birth_date,
+                   p.gender AS patient_gender,
                    d.full_name AS doctor_name,
-                   d.specialization AS doctor_specialization
+                   d.specialization AS doctor_specialization,
+                   d.str_number AS doctor_sip
             FROM medical_records mr
             JOIN patients p ON p.id = mr.patient_id
             JOIN doctors d ON d.id = mr.doctor_id
@@ -111,8 +127,11 @@ async def list_deleted_records(
             SELECT mr.*,
                    p.full_name AS patient_name,
                    p.nik AS patient_nik,
+                   p.birth_date AS patient_birth_date,
+                   p.gender AS patient_gender,
                    d.full_name AS doctor_name,
-                   d.specialization AS doctor_specialization
+                   d.specialization AS doctor_specialization,
+                   d.str_number AS doctor_sip
             FROM medical_records mr
             JOIN patients p ON p.id = mr.patient_id
             JOIN doctors d ON d.id = mr.doctor_id
@@ -147,21 +166,30 @@ async def create_medical_record(
             detail="Diagnosis wajib diisi",
         )
 
-    # Validasi pasien ada
-    patient = await fetch_one("SELECT id FROM patients WHERE id = %s;", (req.patient_id,))
-    if not patient:
+    if req.prescription and not req.prescription_items:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pasien tidak ditemukan",
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Resep harus dikirim sebagai daftar obat terstruktur, bukan teks bebas.",
         )
 
-    # Transaksi atomik pembuatan medical record & penyelesaian konsultasi
+    # Rekam medis, resep, item obat, dan penyelesaian konsultasi harus atomik.
+    created_prescription_id = None
+    prescription_lines: list[str] = []
     async with transaction() as conn:
         async with conn.cursor() as cur:
+            await cur.execute("SELECT id FROM patients WHERE id = %s;", (req.patient_id,))
+            if not await cur.fetchone():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Pasien tidak ditemukan",
+                )
+
             if req.consultation_id:
-                # Periksa apakah konsultasi valid
                 await cur.execute(
-                    "SELECT id FROM consultations WHERE id = %s;",
+                    """
+                    SELECT id, patient_id, doctor_id, status
+                    FROM consultations WHERE id = %s FOR UPDATE;
+                    """,
                     (req.consultation_id,),
                 )
                 c_row = await cur.fetchone()
@@ -170,7 +198,59 @@ async def create_medical_record(
                         status_code=status.HTTP_404_NOT_FOUND,
                         detail="Konsultasi terkait tidak ditemukan",
                     )
-                # Tandai konsultasi Selesai
+                if c_row["doctor_id"] != doctor_id or c_row["patient_id"] != req.patient_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Rekam medis hanya boleh dibuat untuk pasien dan konsultasi yang ditugaskan kepada dokter ini.",
+                    )
+                if c_row["status"] in {"Selesai", "Dibatalkan"}:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Konsultasi sudah ditutup dan tidak dapat diterbitkan ulang.",
+                    )
+                await cur.execute(
+                    "SELECT id FROM medical_records WHERE consultation_id = %s LIMIT 1;",
+                    (req.consultation_id,),
+                )
+                if await cur.fetchone():
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="Rekam medis untuk konsultasi ini sudah pernah diterbitkan.",
+                    )
+
+            # Resolve medicine names and units from the pharmacy catalog; the client
+            # submits IDs, never free-text names that could bypass the catalog.
+            resolved_items = []
+            for item in req.prescription_items:
+                await cur.execute(
+                    "SELECT id, name, unit FROM medicines WHERE id = %s;",
+                    (item.medicine_id,),
+                )
+                medicine = await cur.fetchone()
+                if not medicine:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=f"Obat dengan ID {item.medicine_id} tidak tersedia di katalog farmasi.",
+                    )
+                dosage = item.dosage.strip()
+                if not dosage:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=f"Aturan pakai wajib diisi untuk {medicine['name']}.",
+                    )
+                quantity = f"{item.quantity} {medicine['unit'] or 'unit'}"
+                resolved_items.append({
+                    "medicine_id": medicine["id"],
+                    "medicine_name": medicine["name"],
+                    "quantity": quantity,
+                    "dosage": dosage,
+                })
+                prescription_lines.append(
+                    f"{medicine['name']} — {quantity}; aturan pakai: {dosage}"
+                )
+
+            prescription_text = "\n".join(prescription_lines) or None
+            if req.consultation_id:
                 await cur.execute(
                     """
                     UPDATE consultations
@@ -196,7 +276,7 @@ async def create_medical_record(
                     req.complaint,
                     diagnosis,
                     req.treatment,
-                    req.prescription,
+                    prescription_text,
                     req.vital_bp,
                     req.vital_heart_rate,
                     req.vital_temperature,
@@ -207,13 +287,50 @@ async def create_medical_record(
             mr_row = await cur.fetchone()
             created_id = mr_row["id"]
 
+            if resolved_items:
+                await cur.execute(
+                    """
+                    INSERT INTO prescriptions (
+                        medical_record_id, consultation_id, patient_id, doctor_id,
+                        status, notes
+                    ) VALUES (%s, %s, %s, %s, 'Menunggu Penyiapan', %s)
+                    RETURNING id;
+                    """,
+                    (
+                        created_id,
+                        req.consultation_id,
+                        req.patient_id,
+                        doctor_id,
+                        req.prescription_note.strip() if req.prescription_note else None,
+                    ),
+                )
+                created_prescription_id = (await cur.fetchone())["id"]
+                for item in resolved_items:
+                    await cur.execute(
+                        """
+                        INSERT INTO prescription_items (
+                            prescription_id, medicine_id, medicine_name, quantity, dosage
+                        ) VALUES (%s, %s, %s, %s, %s);
+                        """,
+                        (
+                            created_prescription_id,
+                            item["medicine_id"],
+                            item["medicine_name"],
+                            item["quantity"],
+                            item["dosage"],
+                        ),
+                    )
+
     full_record = await fetch_one(
         """
         SELECT mr.*,
                p.full_name AS patient_name,
                p.nik AS patient_nik,
+               p.birth_date AS patient_birth_date,
+               p.gender AS patient_gender,
                d.full_name AS doctor_name,
-               d.specialization AS doctor_specialization
+               d.specialization AS doctor_specialization,
+               d.str_number AS doctor_sip
         FROM medical_records mr
         JOIN patients p ON p.id = mr.patient_id
         JOIN doctors d ON d.id = mr.doctor_id
@@ -232,6 +349,18 @@ async def create_medical_record(
         details=f"Penerbitan rekam medis baru ID={created_id} untuk pasien ID={req.patient_id}.",
     )
 
+    if created_prescription_id:
+        await audit(
+            request=request,
+            user=current_user,
+            action="CREATE",
+            table="prescriptions",
+            record_id=created_prescription_id,
+            severity="info",
+            details=f"Resep elektronik ID={created_prescription_id} diterbitkan untuk rekam medis ID={created_id}.",
+        )
+
+    full_record["prescription_id"] = created_prescription_id
     return full_record
 
 
@@ -255,8 +384,11 @@ async def get_medical_record_detail(
         SELECT mr.*,
                p.full_name AS patient_name,
                p.nik AS patient_nik,
+               p.birth_date AS patient_birth_date,
+               p.gender AS patient_gender,
                d.full_name AS doctor_name,
-               d.specialization AS doctor_specialization
+               d.specialization AS doctor_specialization,
+               d.str_number AS doctor_sip
         FROM medical_records mr
         JOIN patients p ON p.id = mr.patient_id
         JOIN doctors d ON d.id = mr.doctor_id

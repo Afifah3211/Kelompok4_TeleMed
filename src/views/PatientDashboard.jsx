@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { isChatConsultation } from '../utils/consultation';
 import { 
   User, 
   Calendar, 
   FileText, 
   Video, 
-  Plus, 
+  MessageCircle,
   Clock, 
   ShieldCheck, 
   ChevronRight, 
@@ -27,6 +28,7 @@ export default function PatientDashboard() {
     appointments, 
     emrs, 
     prescriptions,
+    refreshPrescriptions,
     setTeleconsultationSession, 
     setIsBookingOpen, 
     setViewingEMR,
@@ -35,28 +37,40 @@ export default function PatientDashboard() {
 
   const [activeTab, setActiveTab] = useState('jadwal'); // 'jadwal', 'riwayat', 'resep', 'profil'
 
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === 'visible') {
+        refreshPrescriptions().catch((error) => console.warn('Gagal memperbarui status resep:', error));
+      }
+    };
+    const timer = window.setInterval(refresh, 20000);
+    return () => window.clearInterval(timer);
+  }, [refreshPrescriptions]);
+
   // Patient profile form state
   const [profileForm, setProfileForm] = useState({
     name: currentUser.name || '',
     nik: currentUser.nik || '',
     birthDate: currentUser.birthDate || '',
-    gender: currentUser.gender || 'Laki-laki',
+    gender: currentUser.gender || '',
     phone: currentUser.phone || '',
     address: currentUser.address || '',
-    bloodType: currentUser.bloodType || 'O+',
-    allergies: currentUser.allergies || 'Tidak Ada'
+    bloodType: currentUser.bloodType || '',
+    allergies: currentUser.allergies || ''
   });
 
-  // Filter appointments for current patient (gunakan patientId profil dari DB)
-  const myPatientId = currentUser.patientId ?? currentUser.id;
-  const patientAppointments = appointments.filter((a) => a.patientId === myPatientId);
+  // Filter appointments for current patient
+  const patientAppointments = appointments.filter((a) => Number(a.patientId) === Number(currentUser.patientId));
   const upcomingAppointments = patientAppointments.filter((a) => a.status !== 'Selesai' && a.status !== 'Dibatalkan');
+  const completedChatAppointments = patientAppointments.filter(
+    (a) => a.status === 'Selesai' && isChatConsultation(a.type)
+  );
   
   // Filter EMRs for current patient (excluding soft-deleted ones from regular patient view)
-  const patientEMRs = emrs.filter((e) => e.patientId === myPatientId && !e.isDeleted);
+  const patientEMRs = emrs.filter((e) => Number(e.patientId) === Number(currentUser.patientId) && !e.isDeleted);
 
   // Filter Prescriptions for current patient
-  const patientPrescriptions = (prescriptions || []).filter((p) => p.patientId === myPatientId);
+  const patientPrescriptions = (prescriptions || []).filter((p) => Number(p.patientId) === Number(currentUser.patientId));
 
   const handleProfileSubmit = (e) => {
     e.preventDefault();
@@ -144,9 +158,6 @@ export default function PatientDashboard() {
             <FileText size={18} />
             <span>Riwayat Medis (EMR)</span>
           </div>
-          <span className="badge badge-accent" style={{ padding: '2px 7px', fontSize: '0.7rem' }}>
-            {patientEMRs.length}
-          </span>
         </button>
 
         <button
@@ -170,9 +181,6 @@ export default function PatientDashboard() {
             <Pill size={18} />
             <span>Resep & Obat</span>
           </div>
-          <span className="badge badge-accent" style={{ padding: '2px 7px', fontSize: '0.7rem', background: '#F0FDF4', color: '#16A34A', border: '1px solid #BBF7D0' }}>
-            {patientPrescriptions.length}
-          </span>
         </button>
 
         <button
@@ -196,17 +204,6 @@ export default function PatientDashboard() {
           <span>Profil Pasien</span>
         </button>
 
-        <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #F1F5F9' }}>
-          <button
-            className="btn btn-primary"
-            style={{ width: '100%', fontSize: '0.85rem' }}
-            onClick={() => setIsBookingOpen(true)}
-          >
-            <Plus size={16} />
-            <span>Buat Janji Baru</span>
-          </button>
-        </div>
-
         {/* Quick Health Summary Card */}
         <div 
           style={{ 
@@ -222,8 +219,8 @@ export default function PatientDashboard() {
             <HeartPulse size={16} /> Informasi Kesehatan
           </div>
           <div style={{ color: '#334155' }}>
-            <div>Gol. Darah: <strong>{currentUser.bloodType || 'O+'}</strong></div>
-            <div style={{ marginTop: '2px' }}>Alergi: <strong style={{ color: '#DC2626' }}>{currentUser.allergies || 'Tidak Ada'}</strong></div>
+            <div>Gol. Darah: <strong>{currentUser.bloodType || 'Belum diisi'}</strong></div>
+            <div style={{ marginTop: '2px' }}>Alergi: <strong style={{ color: '#DC2626' }}>{currentUser.allergies || 'Belum diisi'}</strong></div>
           </div>
         </div>
       </aside>
@@ -273,7 +270,7 @@ export default function PatientDashboard() {
               style={{ background: '#FFFFFF', color: '#1D4ED8', fontWeight: 700 }}
             >
               <Calendar size={18} />
-              <span>Daftar Konsultasi</span>
+              <span>Buat Konsultasi</span>
             </button>
           </div>
         </div>
@@ -282,6 +279,7 @@ export default function PatientDashboard() {
         {(activeTab === 'jadwal' || activeTab === 'riwayat') && (
           <>
             {/* Section: 'Konsultasi Mendatang' (PRD Spec Halaman 3) */}
+            {activeTab === 'jadwal' && (
             <div className="card">
               <div className="card-header">
                 <div>
@@ -293,19 +291,13 @@ export default function PatientDashboard() {
                     Daftar antrean dan jadwal pertemuan telemedis aktif Anda
                   </p>
                 </div>
-                <button
-                  className="btn btn-outline btn-sm"
-                  onClick={() => setIsBookingOpen(true)}
-                >
-                  <Plus size={14} /> Tambah Jadwal
-                </button>
               </div>
 
               {upcomingAppointments.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '36px 20px', color: '#64748B' }}>
                   <Calendar size={42} style={{ color: '#CBD5E1', margin: '0 auto 10px' }} />
                   <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>Tidak ada konsultasi aktif saat ini</div>
-                  <div style={{ fontSize: '0.82rem', marginTop: '4px' }}>Klik tombol di atas untuk membuat janji temu dengan dokter spesialis.</div>
+                  <div style={{ fontSize: '0.82rem', marginTop: '4px' }}>Gunakan tombol Buat Konsultasi di bagian atas untuk memilih dokter dan jadwal.</div>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -360,7 +352,7 @@ export default function PatientDashboard() {
                             <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <Clock size={14} /> {apt.time}
                             </span>
-                            <span>Tipe: <strong>{apt.type}</strong></span>
+                          <span>Metode: <strong>{apt.type}</strong></span>
                           </div>
 
                           <div style={{ fontSize: '0.82rem', color: '#334155', marginTop: '6px' }}>
@@ -384,8 +376,8 @@ export default function PatientDashboard() {
                             boxShadow: '0 4px 12px rgba(29, 78, 216, 0.25)'
                           }}
                         >
-                          <Video size={18} />
-                          <span>Gabung</span>
+                          {isChatConsultation(apt.type) ? <MessageCircle size={18} /> : <Video size={18} />}
+                          <span>{isChatConsultation(apt.type) ? 'Buka Chat' : 'Buka Ruang Video'}</span>
                         </button>
                       </div>
                     </div>
@@ -393,8 +385,36 @@ export default function PatientDashboard() {
                 </div>
               )}
             </div>
+            )}
 
             {/* Section: 'Riwayat Pemeriksaan' in a neat table (PRD Spec Halaman 3) */}
+            {activeTab === 'riwayat' && (
+            <>
+            <div className="card">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title"><MessageCircle size={20} color="#0F766E" /> Percakapan Konsultasi Selesai</h2>
+                  <p style={{ fontSize: '0.82rem', color: '#64748B', marginTop: '2px' }}>Pesan dan gambar chat tetap dapat dibaca setelah konsultasi selesai.</p>
+                </div>
+              </div>
+              {completedChatAppointments.length === 0 ? (
+                <div style={{ color: '#64748B', padding: '12px 0' }}>Belum ada percakapan konsultasi selesai.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {completedChatAppointments.map((apt) => (
+                    <div key={apt.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 12, border: '1px solid #E2E8F0', borderRadius: 10 }}>
+                      <div>
+                        <strong>{apt.doctorName}</strong>
+                        <div style={{ color: '#64748B', fontSize: 13 }}>{apt.date} · {apt.type}</div>
+                      </div>
+                      <button type="button" className="btn btn-outline btn-sm" onClick={() => setTeleconsultationSession(apt)}>
+                        <MessageCircle size={15} /> Lihat Chat
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="card">
               <div className="card-header">
                 <div>
@@ -467,6 +487,8 @@ export default function PatientDashboard() {
                 </div>
               )}
             </div>
+            </>
+            )}
           </>
         )}
 

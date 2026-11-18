@@ -3,6 +3,8 @@
 
 TeleMed (MediSync) adalah platform telemedis berbasis web modern yang menghubungkan pasien, dokter spesialis, apoteker, dan administrator klinik secara terintegrasi. Sistem dilengkapi dengan **Rekam Medis Elektronik (EMR)** berfitur *Soft Delete*, pencatatan forensik audit trail (*Audit Log*), **Pencadangan Data Otomatis Berstandar Aturan 3-2-1** (Dump Logis, Base Backup, Continuous WAL Archiving, dan Enkripsi Off-site AES-256), serta kapabilitas **Horizontal Autoscaling & Dynamic Load Balancing**.
 
+Dokumen praktikum: [Spesifikasi Arsitektur](ARCHITECTURE_SPEC.md), [DRP](recovery/DRP_RECOVERY_PLAN.md), dan [Checklist Deliverable per Pertemuan](PRAKTIKUM.md). PRD produk tersedia di [Dokumen PRD Telemedis.pdf](Dokumen%20PRD%20Telemedis.pdf).
+
 ---
 
 ## 🏗️ Arsitektur Sistem & Container
@@ -77,16 +79,29 @@ Sistem diorkestrasi menggunakan **Docker Compose** pada satu jaringan terisolasi
 - Port host **8080** bebas dan dapat digunakan.
 
 ### 1. Inisialisasi Kunci Rahasia
-Salin template environment dan pastikan kunci rahasia backup telah tersedia di `./secrets/backup_key.txt`:
+Salin template environment, ganti `JWT_SECRET` dengan nilai acak (minimal 32 karakter), lalu buat Docker secret backup. Jangan commit `.env` atau `secrets/`:
 ```powershell
-# Di Windows PowerShell / Linux Terminal
-cp .env.example .env
+# PowerShell: salin template, lalu edit .env dan ganti JWT_SECRET.
+Copy-Item .env.example .env
+New-Item -ItemType Directory -Force secrets | Out-Null
+# Buat key acak untuk enkripsi backup (contoh PowerShell):
+[Convert]::ToBase64String([Security.Cryptography.RandomNumberGenerator]::GetBytes(32)) | Set-Content secrets/backup_key.txt
 ```
+Pada Linux/macOS, gunakan `cp .env.example .env`, `mkdir -p secrets`, dan `openssl rand -base64 32 > secrets/backup_key.txt`.
 
 ### 2. Build & Jalankan Seluruh Layanan
-```bash
-docker compose up -d --build
+Di Windows, cara termudah adalah menjalankan launcher yang menyamakan password role PostgreSQL dengan `.env`, lalu build dan menyalakan aplikasi:
+```powershell
+.\run-local.cmd
 ```
+
+Launcher ini memakai Execution Policy `Bypass` hanya untuk proses PowerShell yang dijalankan olehnya; kebijakan Windows tidak diubah permanen. Data volume tidak dihapus.
+
+Alternatif manual untuk menjalankan stack tanpa launcher:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+PostgreSQL hanya tersedia di jaringan Compose. Untuk koneksi GUI lokal, gunakan override `docker-compose.dev.yml` yang memetakan port `5433` ke loopback.
 
 ### 3. Verifikasi Status Layanan
 Pastikan seluruh container berada pada kondisi `Up (healthy)`:
@@ -105,6 +120,18 @@ docker compose down
 # docker compose down -v
 ```
 
+### Penyimpanan File/CDN Lokal
+
+Gambar hanya diunggah melalui chat di dalam konsultasi. Backend memeriksa bahwa pengguna adalah pasien pemilik konsultasi atau dokter yang ditugaskan; pesan dan metadata gambar masuk ke PostgreSQL, sedangkan objek gambar disimpan di MinIO. Browser menerima URL bertanda tangan berdurasi satu jam; Nginx memvalidasi URL sebelum meneruskan/cache gambar dari MinIO. Header `X-Cache-Status` menunjukkan status cache. Tidak ada file explorer global. Port S3 tidak dibuka ke host pada Compose utama; console MinIO hanya dibuka pada loopback dengan Compose development override.
+
+Untuk membandingkan origin dengan CDN, jalankan dua pengujian terpisah dari PowerShell:
+```powershell
+.\run_stress.ps1 -Tag cdn -Script stress_cdn.js -Mode cdn
+.\run_stress.ps1 -Tag origin -Script stress_cdn.js -Mode direct
+python k6/plot_cdn.py
+```
+Skrip CDN menguji GET aset pada 10, 100, dan 500 VU (durasi tahan default 1 menit) dan menyimpan ringkasan JSON serta dashboard HTML di `k6/results/`. Runner membatasi skenario ini sampai 500 VU. Jika `SEED_PASSWORD` di `.env` diubah, tambahkan `-SeedPassword "password-demo-anda"` pada kedua perintah. Jalankan tiap mode pada kondisi host yang serupa, dan tunggu cooldown sebelum memulai mode berikutnya.
+
 ---
 
 ## 🗄️ Koneksi Database GUI (pgAdmin / DBeaver)
@@ -117,12 +144,14 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 ```
 Konfigurasi ini akan memetakan port container `5432` ke port host **`127.0.0.1:5433`** (khusus loopback).
 
+Di pgAdmin Windows, daftarkan server **sekali** melalui **Register → Server**. Simpan password agar pgAdmin dapat menggunakannya kembali setelah aplikasi direstart. Docker dapat menyalakan database dan membuka portnya, tetapi tidak dapat otomatis membuat entri di aplikasi pgAdmin Desktop yang terpasang di Windows.
+
 ### 2. Parameter Koneksi GUI:
 - **Host / Address**: `localhost` atau `127.0.0.1`
 - **Port**: `5433`
-- **Maintenance Database**: `telemed`
-- **Username**: `telemed_admin`
-- **Password**: Nilai `PGPASSWORD` pada file `.env` (default: `medisync2026`)
+- **Maintenance Database**: nilai `POSTGRES_DB` pada `.env` (project saat ini: `telemed`)
+- **Username**: nilai `POSTGRES_USER` pada `.env` (project saat ini: `telemed_admin`)
+- **Password**: nilai `POSTGRES_PASSWORD` pada `.env`
 
 ---
 

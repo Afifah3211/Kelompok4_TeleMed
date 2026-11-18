@@ -148,6 +148,24 @@ CREATE TABLE IF NOT EXISTS prescription_items (
   dosage          TEXT
 );
 
+-- 7b. Consultation chat messages and MinIO image metadata --------
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id                       BIGSERIAL PRIMARY KEY,
+  consultation_id          INTEGER NOT NULL REFERENCES consultations(id) ON DELETE CASCADE,
+  sender_user_id           INTEGER NOT NULL REFERENCES users(id),
+  body                     TEXT,
+  attachment_key           VARCHAR(512),
+  attachment_name          VARCHAR(255),
+  attachment_content_type  VARCHAR(100),
+  attachment_size_bytes    BIGINT,
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chat_message_has_content CHECK (
+    NULLIF(BTRIM(body), '') IS NOT NULL OR attachment_key IS NOT NULL
+  )
+);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_consultation_created
+  ON chat_messages(consultation_id, created_at, id);
+
 -- 8. backup (konfigurasi tampilan + log eksekusi nyata) -------
 CREATE TABLE IF NOT EXISTS backup_config (
   id              SERIAL PRIMARY KEY,

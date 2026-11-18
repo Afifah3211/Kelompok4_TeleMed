@@ -6,7 +6,7 @@
 
 $BASE_URL = "http://localhost:8080"
 $ADMIN_USER = "admin@medisync.id"
-$ADMIN_PASS = "medisync2026"
+$ADMIN_PASS = if ($env:SEED_PASSWORD) { $env:SEED_PASSWORD } else { "medisync2026" }
 
 Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
@@ -26,7 +26,7 @@ if (-not $TOKEN) {
     Write-Host "GAGAL login! Cek apakah container sudah berjalan." -ForegroundColor Red
     exit 1
 }
-Write-Host "Login BERHASIL. Token: $($TOKEN.Substring(0,30))..." -ForegroundColor Green
+Write-Host "Login BERHASIL." -ForegroundColor Green
 
 $headers = @{ Authorization = "Bearer $TOKEN" }
 
@@ -61,6 +61,7 @@ Write-Host "============================================================" -Foreg
 Write-Host "[STEP 3] SIMULASI INSIDEN: DROP TABLE medical_records" -ForegroundColor Red
 Write-Host "============================================================" -ForegroundColor Red
 
+$recoveryClock = [System.Diagnostics.Stopwatch]::StartNew()
 $incident = Invoke-RestMethod -Method POST -Uri "$BASE_URL/api/drp/simulate-drop" -Headers $headers
 Write-Host "Records yang hilang: $($incident.records_lost)" -ForegroundColor Red
 Write-Host "Pesan: $($incident.message)" -ForegroundColor Red
@@ -88,6 +89,8 @@ Write-Host "  Snapshot: $SNAPSHOT_ID" -ForegroundColor Yellow
 Write-Host "============================================================" -ForegroundColor Yellow
 
 $recovery = Invoke-RestMethod -Method POST -Uri "$BASE_URL/api/drp/recover/$SNAPSHOT_ID" -Headers $headers
+$recoveryClock.Stop()
+$rtoSeconds = [math]::Round($recoveryClock.Elapsed.TotalSeconds, 2)
 Write-Host "Recovery Status: $($recovery.recovery_status)" -ForegroundColor Green
 Write-Host "Records dipulihkan: $($recovery.recovered_records)" -ForegroundColor Green
 Write-Host "Data Loss: $($recovery.data_loss)" -ForegroundColor Green
@@ -116,7 +119,8 @@ Write-Host "Records hilang    : $($incident.records_lost)" -ForegroundColor Red
 Write-Host "Records dipulihkan: $($recovery.recovered_records)" -ForegroundColor Green
 Write-Host "Data Loss         : $($recovery.data_loss)" -ForegroundColor White
 Write-Host "RPO Tercapai      : $($recovery.rpo_achieved)" -ForegroundColor Green
-Write-Host "RTO Target        : < 5 menit" -ForegroundColor White
+Write-Host "Waktu recovery    : $rtoSeconds detik" -ForegroundColor White
+Write-Host "RTO Tercapai      : $($rtoSeconds -le 300) (target <= 300 detik)" -ForegroundColor White
 Write-Host ""
 if ($recovery.rpo_achieved -eq $true) {
     Write-Host "HASIL: DR TEST BERHASIL - Zero Data Loss!" -ForegroundColor Green

@@ -14,25 +14,11 @@ VALID_RX_STATUSES = {
     "Sedang Diramu",
     "Selesai / Sudah Diambil",
 }
-
-
-class PrescriptionItemInput(BaseModel):
-    medicine_id: Optional[int] = Field(None, alias="medicineId")
-    medicine_name: str = Field(..., alias="medicineName")
-    quantity: str
-    dosage: Optional[str] = None
-
-    model_config = {"populate_by_name": True}
-
-
-class CreatePrescriptionRequest(BaseModel):
-    patient_id: int = Field(..., alias="patientId")
-    medical_record_id: Optional[int] = Field(None, alias="medicalRecordId")
-    consultation_id: Optional[int] = Field(None, alias="consultationId")
-    notes: Optional[str] = None
-    items: list[PrescriptionItemInput] = []
-
-    model_config = {"populate_by_name": True}
+NEXT_RX_STATUS = {
+    "Menunggu Penyiapan": "Sedang Diramu",
+    "Sedang Diramu": "Selesai / Sudah Diambil",
+    "Selesai / Sudah Diambil": None,
+}
 
 
 class UpdatePrescriptionStatusRequest(BaseModel):
@@ -104,99 +90,6 @@ async def list_prescriptions(
     return prescriptions
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
-async def create_prescription(
-    req: CreatePrescriptionRequest,
-    request: Request,
-    current_user: dict[str, Any] = Depends(require_roles("dokter")),
-):
-    """
-    Pembuatan resep obat baru (hanya dokter).
-    doctor_id dipaksa dari JWT token.
-    Prescription dan daftar prescription_items disimpan dalam satu transaksi atomik.
-    """
-    doctor_id = current_user.get("pid")
-    if not doctor_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Profil dokter tidak ditemukan untuk akun ini",
-        )
-
-    patient = await fetch_one("SELECT id FROM patients WHERE id = %s;", (req.patient_id,))
-    if not patient:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Pasien tidak ditemukan",
-        )
-
-    async with transaction() as conn:
-        async with conn.cursor() as cur:
-            await cur.execute(
-                """
-                INSERT INTO prescriptions (
-                    medical_record_id, consultation_id, patient_id, doctor_id,
-                    status, notes
-                ) VALUES (%s, %s, %s, %s, 'Menunggu Penyiapan', %s)
-                RETURNING id;
-                """,
-                (
-                    req.medical_record_id,
-                    req.consultation_id,
-                    req.patient_id,
-                    doctor_id,
-                    req.notes,
-                ),
-            )
-            rx_row = await cur.fetchone()
-            rx_id = rx_row["id"]
-
-            for it in req.items:
-                await cur.execute(
-                    """
-                    INSERT INTO prescription_items (
-                        prescription_id, medicine_id, medicine_name, quantity, dosage
-                    ) VALUES (%s, %s, %s, %s, %s);
-                    """,
-                    (
-                        rx_id,
-                        it.medicine_id,
-                        it.medicine_name.strip(),
-                        it.quantity.strip(),
-                        it.dosage.strip() if it.dosage else None,
-                    ),
-                )
-
-    full_rx = await fetch_one(
-        """
-        SELECT pr.*,
-               p.full_name AS patient_name,
-               d.full_name AS doctor_name
-        FROM prescriptions pr
-        JOIN patients p ON p.id = pr.patient_id
-        JOIN doctors d ON d.id = pr.doctor_id
-        WHERE pr.id = %s;
-        """,
-        (rx_id,),
-    )
-    items = await fetch_all(
-        "SELECT id, prescription_id, medicine_id, medicine_name, quantity, dosage FROM prescription_items WHERE prescription_id = %s ORDER BY id ASC;",
-        (rx_id,),
-    )
-    full_rx["items"] = items
-
-    await audit(
-        request=request,
-        user=current_user,
-        action="CREATE",
-        table="prescriptions",
-        record_id=rx_id,
-        severity="info",
-        details=f"Penerbitan resep obat ID={rx_id} untuk pasien ID={req.patient_id}.",
-    )
-
-    return full_rx
-
-
 @router.patch("/{id}/status")
 async def update_prescription_status(
     id: int,
@@ -207,7 +100,7 @@ async def update_prescription_status(
     """
     Update status resep obat (khusus apoteker).
     Validasi status: 'Menunggu Penyiapan', 'Sedang Diramu', 'Selesai / Sudah Diambil'.
-    Saat 'Selesai / Sudah Diambil', kurangi stok medicines dalam transaksi yang sama.
+    Stok dikurangi ketika resep benar-benar ditandai sudah diserahkan.
     Tolak bila stok tidak mencukupi.
     """
     new_status = req.status.strip()
@@ -225,6 +118,12 @@ async def update_prescription_status(
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Resep obat tidak ditemukan",
+                )
+
+            if NEXT_RX_STATUS.get(rx["status"]) != new_status:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Transisi status tidak valid: {rx['status']} tidak dapat diubah menjadi {new_status}.",
                 )
 
             # Jika berubah menjadi 'Selesai / Sudah Diambil', kurangi stok obat
@@ -257,20 +156,24 @@ async def update_prescription_status(
                         )
                         med = await cur.fetchone()
 
-                    if med:
-                        if med["stock"] < qty_needed:
-                            raise HTTPException(
-                                status_code=status.HTTP_400_BAD_REQUEST,
-                                detail=(
-                                    f"Stok obat '{med['name']}' tidak mencukupi "
-                                    f"(tersedia: {med['stock']}, dibutuhkan: {qty_needed})"
-                                ),
-                            )
-                        # Kurangi stok
-                        await cur.execute(
-                            "UPDATE medicines SET stock = stock - %s WHERE id = %s;",
-                            (qty_needed, med["id"]),
+                    if not med:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail=f"Obat '{it.get('medicine_name')}' tidak terhubung ke katalog stok; stok tidak dapat dipotong.",
                         )
+                    if med["stock"] < qty_needed:
+                        raise HTTPException(
+                            status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=(
+                                f"Stok obat '{med['name']}' tidak mencukupi "
+                                f"(tersedia: {med['stock']}, dibutuhkan: {qty_needed})"
+                            ),
+                        )
+                    # Kurangi stok hanya ketika apoteker menyelesaikan penyerahan.
+                    await cur.execute(
+                        "UPDATE medicines SET stock = stock - %s WHERE id = %s;",
+                        (qty_needed, med["id"]),
+                    )
 
             await cur.execute(
                 """

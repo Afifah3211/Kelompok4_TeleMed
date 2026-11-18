@@ -1,4 +1,4 @@
-/**
+﻿/**
  * TeleMed - API Client (Frontend -> FastAPI Backend)
  * Menghubungkan React frontend ke FastAPI REST API backend dengan JWT Bearer Auth.
  * Token disimpan di sessionStorage (bukan localStorage).
@@ -176,10 +176,6 @@ export const consultationsApi = {
       method: 'PATCH',
       body: { status },
     }),
-  cleanupTestData: () =>
-    apiFetch('/consultations/cleanup-test-data', {
-      method: 'POST',
-    }),
 };
 
 // =========================================
@@ -299,11 +295,6 @@ export const medicinesApi = {
 // =========================================
 export const prescriptionsApi = {
   getAll: () => apiFetch('/prescriptions'),
-  create: (data) =>
-    apiFetch('/prescriptions', {
-      method: 'POST',
-      body: data,
-    }),
   updateStatus: (id, { status, pharmacistNotes, pharmacist_notes }) =>
     apiFetch(`/prescriptions/${id}/status`, {
       method: 'PATCH',
@@ -315,72 +306,20 @@ export const prescriptionsApi = {
 };
 
 // =========================================
-// FILES API (MinIO CDN - Pertemuan 5)
+// CONSULTATION CHAT (PostgreSQL messages + MinIO image attachment via CDN)
 // =========================================
-export const filesApi = {
-  /**
-   * Upload file ke MinIO via backend.
-   * @param {File} file - File object dari input[type=file]
-   * @param {function} onProgress - opsional callback progress (tidak dipakai di fetch biasa)
-   * @returns {{ key, url, cdn_url, filename, size_bytes, content_type }}
-   */
-  upload: async (file) => {
-    const token = getToken();
+export const chatApi = {
+  getMessages: (consultationId) =>
+    apiFetch(`/chat/consultations/${consultationId}/messages`),
+  sendMessage: (consultationId, message, image) => {
     const formData = new FormData();
-    formData.append('file', file);
-
-    const res = await fetch(`${BASE_URL}/files/upload`, {
+    formData.append('message', message || '');
+    if (image) formData.append('image', image);
+    return apiFetch(`/chat/consultations/${consultationId}/messages`, {
       method: 'POST',
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        // Jangan set Content-Type — biarkan browser set multipart boundary otomatis
-      },
       body: formData,
     });
-
-    if (res.status === 401) {
-      clearToken();
-      window.dispatchEvent(new CustomEvent('telemed:unauthorized'));
-    }
-
-    const data = await res.json();
-    if (!res.ok) {
-      const error = new Error(data?.detail || `Upload gagal: HTTP ${res.status}`);
-      error.status = res.status;
-      throw error;
-    }
-    return data;
   },
-
-  /**
-   * Dapatkan presigned URL untuk download file.
-   * @param {string} key - object key MinIO (misal "dokter/abc123.pdf")
-   */
-  getPresignedUrl: (key) => apiFetch(`/files/presign/${encodeURIComponent(key)}`),
-
-  /**
-   * Daftar semua file di bucket (admin only).
-   */
-  listFiles: () => apiFetch('/files/list'),
-
-  /**
-   * Hapus file (admin only).
-   * @param {string} key - object key MinIO
-   */
-  deleteFile: (key) =>
-    apiFetch(`/files/${encodeURIComponent(key)}`, { method: 'DELETE' }),
-
-  /**
-   * Bersihkan file dummy stress test (admin only).
-   */
-  cleanupTestFiles: () =>
-    apiFetch('/files/cleanup-test-data', { method: 'POST' }),
-
-  /**
-   * Helper: buat URL CDN publik dari object key.
-   * Menggunakan Nginx proxy /files/ → MinIO (Pertemuan 5).
-   */
-  cdnUrl: (key) => `/files/${key}`,
 };
 // Health check
 export const healthCheck = () => apiFetch('/health');

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 
@@ -16,7 +16,7 @@ ALLOWED_STATUSES = {"Menunggu", "Sedang Berlangsung", "Selesai", "Dibatalkan"}
 class CreateConsultationRequest(BaseModel):
     doctor_id: int
     scheduled_at: datetime
-    type: str = "Video Telekonsultasi"
+    type: Literal["Chat", "Video Call"]
     complaint: Optional[str] = None
     notes: Optional[str] = None
 
@@ -96,6 +96,8 @@ async def list_consultations(
                p.full_name AS patient_name,
                p.nik AS patient_nik,
                p.phone AS patient_phone,
+               p.birth_date AS patient_birth_date,
+               p.gender AS patient_gender,
                d.full_name AS doctor_name,
                d.specialization AS doctor_specialization
         FROM consultations c
@@ -162,6 +164,8 @@ async def create_consultation(
                p.full_name AS patient_name,
                p.nik AS patient_nik,
                p.phone AS patient_phone,
+               p.birth_date AS patient_birth_date,
+               p.gender AS patient_gender,
                d.full_name AS doctor_name,
                d.specialization AS doctor_specialization
         FROM consultations c
@@ -206,6 +210,8 @@ async def get_consultation_detail(
                p.full_name AS patient_name,
                p.nik AS patient_nik,
                p.phone AS patient_phone,
+               p.birth_date AS patient_birth_date,
+               p.gender AS patient_gender,
                d.full_name AS doctor_name,
                d.specialization AS doctor_specialization
         FROM consultations c

@@ -13,6 +13,7 @@ from app.routers import (
     audit_logs,
     auth,
     backup,
+    chat,
     consultations,
     drp,
     files,
@@ -34,6 +35,7 @@ logger = logging.getLogger("telemed.api")
 async def lifespan(app: FastAPI):
     logger.info("Memulai aplikasi TeleMed FastAPI...")
     await init_db_pool()
+    await chat.ensure_chat_schema()
     try:
         files.init_minio_bucket()
         logger.info(f"MinIO bucket '{settings.MINIO_BUCKET}' berhasil diinisialisasi.")
@@ -106,3 +108,4 @@ app.include_router(prescriptions.router, prefix="/api/prescriptions", tags=["pre
 app.include_router(backup.router, prefix="/api/backup", tags=["backup"])
 app.include_router(drp.router, prefix="/api/drp", tags=["drp"])
 app.include_router(files.router, prefix="/api/files", tags=["files"])
+app.include_router(chat.router, prefix="/api/chat", tags=["chat"])

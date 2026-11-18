@@ -22,7 +22,8 @@ RUN chmod +x /scripts/*.sh
 
 # Salin konfigurasi crontab
 COPY crontab /etc/cron.d/backup_cron
-RUN chmod 0644 /etc/cron.d/backup_cron
+RUN sed -i 's/\r$//' /etc/cron.d/backup_cron \
+    && chmod 0644 /etc/cron.d/backup_cron
 
 # Salin dan set entrypoint
 COPY entrypoint.sh /entrypoint.sh

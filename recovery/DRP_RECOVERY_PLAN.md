@@ -1,201 +1,62 @@
-# ============================================================
-# MediSync DRP - Disaster Recovery Plan
-# Studi Kasus: Telemedicine & Rekam Medis Elektronik
-# Versi: 2.0 | Kelompok 4 TeleMed
-# ============================================================
+# Disaster Recovery Plan (DRP) — TeleMed
 
-> **Tantangan:** Privasi data absolut dan nol toleransi terhadap hilangnya
-> data medis pasien. RPO target ≈ 0 (Zero Data Loss).
+Versi ini mengikuti implementasi aktif: React/Vite, Nginx, FastAPI, PostgreSQL 16, Docker Compose, dan MinIO. Perintah yang memakai endpoint DRP membutuhkan akun admin.
 
----
+## Cakupan dan arsitektur
 
-## Arsitektur Multi-Container
+- Frontend dan reverse proxy: service `frontend`, port host 8080.
+- API: service `backend`, FastAPI port internal 8000.
+- Database: service `db`, PostgreSQL 16; volume persisten `pgdata`.
+- Arsip WAL: volume `wal_archive`, diisi oleh PostgreSQL `archive_command`.
+- Backup: service `backup`; dump dan base backup disimpan di volume `backups`, salinan terenkripsi disimpan pada bind mount `./offsite`.
+- Aset file: service MinIO dengan volume `minio_data`.
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                        Docker Host                               │
-│                                                                  │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────┐   │
-│  │  frontend    │    │   backend    │    │   db-backup      │   │
-│  │  (Nginx)     │───▶│  (Node.js)   │    │   (DRP Agent)    │   │
-│  │  Port: 80    │    │  Port: 5000  │    │  Backup Sched.   │   │
-│  └──────────────┘    └──────┬───────┘    └────────┬─────────┘   │
-│                             │                     │              │
-│         ┌───────────────────▼─────────────────────▼──────────┐  │
-│         │            Docker Volumes (PERSISTEN)              │  │
-│         │                                                    │  │
-│         │  📦 medisync_db_data   → SQLite DB (PRIMARY)       │  │
-│         │  📦 medisync_backups   → PITR Snapshots            │  │
-│         │  📦 medisync_recovery  → Scripts & Logs DRP        │  │
-│         └────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────────┘
-```
+## Sasaran pemulihan
 
----
+| Ukuran | Sasaran | Cara mengukur |
+|---|---:|---|
+| RTO | ≤ 5 menit untuk pemulihan tabel dari snapshot yang tersedia | Catat waktu mulai insiden sampai pemeriksaan API dan jumlah rekam medis berhasil |
+| RPO | ≤ 6 jam untuk pemulihan dari dump terjadwal; 0 untuk skenario DROP TABLE setelah snapshot manual berhasil | Bandingkan waktu insiden dengan backup terakhir yang benar-benar dapat dipulihkan dan jumlah rekam medis sebelum/sesudah |
 
-## Aturan 3-2-1 Backup (PRD Kelompok 4)
+RPO nol bukan jaminan umum konfigurasi ini. Dump berjalan tiap 6 jam dan WAL lokal diarsipkan dengan `archive_timeout=60s`, tetapi prosedur pemulihan PITR dari rangkaian WAL belum diotomatisasi/divalidasi. Karena itu, jangan menyatakan RPO 60 detik atau 5 menit sebelum uji restore WAL membuktikannya. Snapshot manual sebelum DROP TABLE memberi RPO nol khusus untuk skenario latihan tersebut.
 
-| Salinan | Media | Lokasi | Implementasi |
-|---------|-------|--------|--------------|
-| **Copy 1** (Primary) | SQLite NVMe | Dalam container | Volume `medisync_db_data` |
-| **Copy 2** (Local) | Docker Volume | Dalam host | Volume `medisync_backups` (PITR + reguler) |
-| **Copy 3** (Offsite) | S3 Glacier | Cloud Singapura | Eksternal / mount volume offsite |
+## Jadwal dan lokasi backup
 
----
+- Dump logis `pg_dump -Fc`: setiap 6 jam ke `/backups/dump`.
+- Base backup `pg_basebackup`: setiap hari ke `/backups/base`.
+- WAL: terus menerus ke volume `wal_archive`.
+- Sync off-site terenkripsi: setiap 5 menit ke `./offsite` (bind mount lokal terpisah; bukan cloud/offsite geografis).
+- Retensi lokal 7 hari, salinan off-site 30 hari; pemeriksaan integritas harian.
+- Kunci enkripsi disediakan melalui Docker secret `./secrets/backup_key.txt`. Simpan kunci produksi secara terpisah dari backup.
 
-## RTO & RPO
+Volume persisten melindungi dari kehilangan container, tetapi tidak melindungi dari kehilangan host. Salinan `./offsite` pada host yang sama juga tidak memenuhi ketahanan terhadap kehilangan host; salin ke media/host berbeda untuk DR produksi.
 
-| Metrik | Target | Strategi |
-|--------|--------|----------|
-| **RPO** | ≈ 0 (Zero Data Loss) | PITR snapshot sebelum setiap operasi kritis |
-| **RTO** | < 5 menit | Recovery via API atau script shell otomatis |
+## Skenario latihan: penghapusan tabel `medical_records`
 
----
+1. Jalankan stack dan simpan waktu mulai latihan.
+2. Jalankan `./dr_test.ps1`. Skrip login admin, merekam status awal, membuat dump snapshot dengan `pg_dump`, menghapus tabel sebagai simulasi insiden, lalu menjalankan `pg_restore` dan memeriksa jumlah data.
+3. Catat waktu insiden, waktu pemulihan selesai, jumlah rekam medis sebelum dan sesudah, serta hasil RPO.
+4. Simpan output terminal dan screenshot status sebelum insiden, saat tabel hilang, dan setelah pulih sebagai laporan insiden.
 
-## Skenario DR Test: "Human Error — DROP TABLE"
+Endpoint simulasi `POST /api/drp/simulate-drop` benar-benar menghapus tabel beserta dependensinya. Gunakan hanya untuk latihan pada data demo, setelah snapshot berhasil dibuat.
 
-### Kronologi Insiden
+## Pemulihan manual dari dump
 
-```
-T-0  : Admin melakukan maintenance pada database
-T+1s : Admin salah ketik: DROP TABLE medical_records
-T+2s : Seluruh rekam medis pasien HILANG dari sistem
-T+3m : Tim DRP mengeksekusi Point-in-Time Recovery
-T+5m : ✅ Sistem normal kembali, nol data hilang
+Untuk pemulihan terarah ke tabel, gunakan latihan `dr_test.ps1`/endpoint `/api/drp/recover/{snapshot_id}`. Untuk restore penuh, hentikan penulisan aplikasi, pilih dump yang tervalidasi, lalu pulihkan ke database kosong/terisolasi sebelum mengalihkan aplikasi. Jangan menguji restore penuh langsung pada database produksi.
+
+Contoh pemeriksaan backup:
+
+```sh
+docker compose exec backup /scripts/dump_logis.sh
+docker compose exec backup /scripts/check_daily.sh
+docker compose exec db pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
 ```
 
----
+## Kriteria latihan berhasil
 
-## Prosedur PITR Lengkap (via API)
+- API kembali sehat dan tabel `medical_records` tersedia.
+- Jumlah data rekam medis sama dengan snapshot bila target RPO latihan tercapai.
+- Durasi pemulihan tercatat dan dibandingkan dengan target RTO 5 menit.
+- File backup, log backup, output DR test, dan screenshot disimpan sebagai bukti.
 
-### Phase 1 — PRE-INCIDENT: Buat Snapshot
-
-```bash
-# Buat PITR snapshot sebelum operasi kritis
-curl -X POST http://localhost/api/drp/snapshot
-
-# Response contoh:
-# {
-#   "success": true,
-#   "snapshot_id": "PITR_20261024_140000",
-#   "stats_at_snapshot": {
-#     "medical_records": 3,
-#     "users": 6
-#   }
-# }
-```
-
-### Phase 2 — INCIDENT: Simulasi DROP TABLE
-
-```bash
-# Simulasikan human error: DROP TABLE medical_records
-curl -X POST http://localhost/api/drp/simulate-drop
-
-# Response akan menunjukkan:
-# - medical_records_table_exists: false
-# - data hilang: 3 rekam medis
-```
-
-### Phase 3 — VERIFY: Konfirmasi Insiden
-
-```bash
-# Cek status database pasca insiden
-curl http://localhost/api/drp/status
-
-# Lihat daftar snapshot PITR tersedia
-curl http://localhost/api/drp/snapshots
-```
-
-### Phase 4 — RECOVERY: Point-in-Time Recovery
-
-```bash
-# Recover dari snapshot pre-incident
-curl -X POST http://localhost/api/drp/recover/PITR_20261024_140000
-
-# Restart backend agar singleton DB ter-refresh
-docker restart medisync_backend
-```
-
-### Phase 5 — VERIFY RECOVERY: Konfirmasi Pemulihan
-
-```bash
-# Verifikasi rekam medis sudah kembali
-curl http://localhost/api/medical-records
-
-# Cek audit log untuk bukti recovery
-curl http://localhost/api/audit-logs
-```
-
----
-
-## Prosedur PITR via Shell Script (dalam Container)
-
-```bash
-# STEP 1: Buat snapshot pre-incident
-docker exec medisync_drp_backup sh /scripts/pitr-snapshot.sh
-
-# STEP 2: Simulasi insiden (drop table)
-docker exec medisync_backend node /app/db/simulate-incident.js
-
-# STEP 3: Recovery
-docker exec medisync_drp_backup sh /scripts/pitr-recover.sh PITR_20261024_HHMMSS
-
-# STEP 4: Restart backend
-docker restart medisync_backend
-
-# STEP 5: Verifikasi
-curl http://localhost:5000/api/drp/status
-```
-
----
-
-## Full System Recovery (Dari Nol)
-
-```bash
-# 1. Clone project
-git clone <repo> && cd Kelompok4_TeleMed
-
-# 2. Build & jalankan semua container
-docker compose up -d --build
-
-# 3. Seed data awal
-docker exec medisync_backend npm run seed
-
-# 4. Restore dari backup (jika tersedia)
-docker exec medisync_drp_backup sh /scripts/restore.sh medisync_drp_LATEST.db
-
-# 5. Verifikasi
-curl http://localhost/api/drp/status
-```
-
----
-
-## Endpoint API DRP
-
-| Method | Endpoint | Fungsi |
-|--------|----------|--------|
-| `GET` | `/api/drp/status` | Status database & sistem DRP |
-| `POST` | `/api/drp/snapshot` | Buat PITR snapshot sekarang |
-| `GET` | `/api/drp/snapshots` | Daftar semua snapshot PITR |
-| `POST` | `/api/drp/simulate-drop` | **[DEMO]** Simulasi DROP TABLE |
-| `POST` | `/api/drp/recover/:id` | Recovery dari snapshot PITR |
-
----
-
-## Mengapa SQLite Cukup untuk Studi Kasus Ini?
-
-> **Pertanyaan:** Haruskah menggunakan PostgreSQL/MySQL yang "lebih nyata"?
-
-**Jawaban: Tidak perlu untuk tujuan demonstrasi DRP ini.**
-
-| Aspek | SQLite (saat ini) | PostgreSQL |
-|-------|-------------------|------------|
-| PITR | ✅ Via file snapshot + WAL | ✅ Via WAL archiving |
-| Zero Data Loss Demo | ✅ Snapshot sebelum insiden | ✅ Continuous WAL streaming |
-| DROP TABLE Recovery | ✅ Restore dari file .db | ✅ pg_restore dari dump |
-| Kompleksitas setup | ✅ Sangat sederhana | ❌ Perlu config banyak |
-| Cocok untuk demo | ✅ Sempurna | ⚠️ Over-engineering |
-
-SQLite dengan WAL mode + Docker Volume sudah memenuhi semua requirement DRP
-studi kasus ini. Migrasi ke PostgreSQL baru diperlukan jika ada **concurrent users
-lebih dari 1000** atau kebutuhan replikasi real-time antar server.
+DR test tidak dianggap berhasil berdasarkan skrip saja; target RTO/RPO baru dapat dinyatakan tercapai setelah nilai runtime diukur dan dicatat.

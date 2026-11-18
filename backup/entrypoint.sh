@@ -14,19 +14,17 @@ log "Memulai inisialisasi Backup Job daemon..."
 
 # Pastikan direktori volume lokal & offsite siap (termasuk pitr untuk backend)
 mkdir -p /backups/dump /backups/base /backups/pitr /offsite/dump /offsite/base /offsite/wal /wal_archive
-# Beri izin tulis ke semua user agar container backend (user: telemed) bisa akses
-chmod -R 777 /backups /wal_archive
+# Backend membutuhkan akses tulis ke direktori snapshot PITR pada volume backups.
+# Volume wal_archive dipasang read-only; jangan chmod volume tersebut.
+chmod -R 777 /backups
 
 # Ekspor environment variables ke /etc/environment agar dapat dibaca oleh proses cron
 log "Mengekspor variabel lingkungan PG* & TZ ke /etc/environment..."
 printenv | grep -E '^(PG|POSTGRES_|TZ|PATH)' > /etc/environment || true
 
-# Terapkan crontab
-log "Memasang crontab dari /etc/cron.d/backup_cron..."
-crontab /etc/cron.d/backup_cron
-
-log "Crontab terpasang dengan jadwal:"
-crontab -l | grep -v '^#' | grep -v '^$' || true
+# Cron Debian membaca jadwal sistem langsung dari /etc/cron.d.
+log "Jadwal backup terpasang dari /etc/cron.d/backup_cron:"
+grep -v '^#' /etc/cron.d/backup_cron | grep -v '^$' || true
 
 log "Backup Job Daemon aktif. Menjalankan cron di foreground..."
 exec cron -f
