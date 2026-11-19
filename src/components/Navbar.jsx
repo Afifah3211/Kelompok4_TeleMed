@@ -4,7 +4,6 @@ import {
   Activity, 
   LogOut,
   LogIn,
-  UserPlus,
   ShieldCheck,
   Stethoscope,
   User,
@@ -32,17 +31,14 @@ export default function Navbar() {
           <div>
             <div className="brand-title">
               TeleMed
-              <span style={{ fontSize: '0.65rem', padding: '2px 6px', background: '#DBEAFE', color: '#1D4ED8', borderRadius: '4px', fontWeight: 700 }}>
-                Enterprise Cloud
-              </span>
             </div>
             <div className="brand-subtitle">
               {isLoggedIn 
                 ? (currentUser.role === 'pasien' ? 'Portal Pasien Terdaftar' :
                    currentUser.role === 'dokter' ? 'Portal Rekam Medis Dokter (EMR)' :
-                   currentUser.role === 'admin' ? 'Portal Administrator & Keamanan DRP' :
+                   currentUser.role === 'admin' ? 'Portal Administrator' :
                    'Portal Instalasi Farmasi & Apoteker')
-                : 'Sistem Telemedicine & Disaster Recovery Plan'}
+                : 'Konsultasi Kesehatan Online'}
             </div>
           </div>
         </div>
@@ -60,25 +56,14 @@ export default function Navbar() {
               </button>
             </nav>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <button 
-                className="btn btn-outline btn-sm"
-                onClick={() => navigateTo('auth', 'login')}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <LogIn size={15} />
-                <span>Masuk</span>
-              </button>
-
-              <button 
-                className="btn btn-primary btn-sm"
-                onClick={() => navigateTo('auth', 'register')}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <UserPlus size={15} />
-                <span>Daftar Pasien</span>
-              </button>
-            </div>
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() => navigateTo('auth', 'login')}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <LogIn size={15} />
+              <span>Masuk</span>
+            </button>
           </div>
         )}
 
@@ -99,7 +84,7 @@ export default function Navbar() {
               )}
               {currentUser.role === 'admin' && (
                 <span className="role-tag tag-admin">
-                  <ShieldCheck size={14} /> Role Admin & DRP
+                  <ShieldCheck size={14} /> Role Admin
                 </span>
               )}
               {currentUser.role === 'apoteker' && (

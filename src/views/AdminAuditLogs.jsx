@@ -23,13 +23,8 @@ import {
   Play,
   RotateCcw,
   Clock,
-  Sparkles,
-  ExternalLink,
-  UploadCloud,
-  FileText
+  Sparkles
 } from 'lucide-react';
-import FileUpload from '../components/FileUpload';
-import { filesApi, consultationsApi } from '../services/api';
 
 export default function AdminAuditLogs() {
   const {
@@ -45,49 +40,8 @@ export default function AdminAuditLogs() {
     showToast
   } = useApp();
 
-  // Tabs: 'log-sistem' | 'kelola-dokter' | 'data-pasien' | 'backup-drp' | 'cdn-files'
+  // Tabs: 'log-sistem' | 'kelola-dokter' | 'data-pasien' | 'backup-drp'
   const [activeAdminTab, setActiveAdminTab] = useState('log-sistem');
-
-  // CDN & File Storage State
-  const [cdnFiles, setCdnFiles] = useState([]);
-  const [loadingFiles, setLoadingFiles] = useState(false);
-
-  const loadStorageFiles = async () => {
-    setLoadingFiles(true);
-    try {
-      const data = await filesApi.listFiles();
-      setCdnFiles(data.files || []);
-    } catch (err) {
-      console.error('Gagal memuat file CDN:', err);
-    } finally {
-      setLoadingFiles(false);
-    }
-  };
-
-  const handleDeleteFile = async (key) => {
-    if (!window.confirm(`Hapus file '${key}' dari MinIO storage?`)) return;
-    try {
-      await filesApi.deleteFile(key);
-      showToast('File berhasil dihapus dari storage', 'success');
-      loadStorageFiles();
-    } catch (err) {
-      showToast(err.message || 'Gagal menghapus file', 'danger');
-    }
-  };
-
-  const handleCleanupTestData = async () => {
-    if (!window.confirm('Bersihkan seluruh data pengujian k6 load test dari database dan file dummy MinIO?')) return;
-    try {
-      const [resDb, resFiles] = await Promise.all([
-        consultationsApi.cleanupTestData(),
-        filesApi.cleanupTestFiles(),
-      ]);
-      showToast(`${resDb.message}. ${resFiles.message}.`, 'success');
-      loadStorageFiles();
-    } catch (err) {
-      showToast(err.message || 'Gagal membersihkan data pengujian', 'danger');
-    }
-  };
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -294,28 +248,6 @@ export default function AdminAuditLogs() {
             <span>Backup & Sistem (DRP)</span>
           </button>
 
-          <button
-            onClick={() => {
-              setActiveAdminTab('cdn-files');
-              loadStorageFiles();
-            }}
-            style={{
-              padding: '8px 14px',
-              borderRadius: '8px',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              background: activeAdminTab === 'cdn-files' ? '#059669' : 'transparent',
-              color: '#FFFFFF',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <HardDrive size={16} />
-            <span>File Storage & CDN</span>
-          </button>
         </div>
       </div>
 
@@ -914,197 +846,6 @@ export default function AdminAuditLogs() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 5: FILE STORAGE & CDN (MinIO) */}
-      {activeAdminTab === 'cdn-files' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* CDN Banner */}
-          <div className="card" style={{ padding: '24px', background: 'linear-gradient(135deg, #F0FDF4 0%, #FFFFFF 100%)', border: '1px solid #BBF7D0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-                  <HardDrive size={24} color="#059669" />
-                  <h2 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#065F46', margin: 0 }}>
-                    File Management & Content Delivery Network (CDN)
-                  </h2>
-                  <span className="badge" style={{ backgroundColor: '#DCFCE7', color: '#166534', fontWeight: 700 }}>
-                    Pertemuan 5
-                  </span>
-                </div>
-                <p style={{ fontSize: '0.88rem', color: '#374151', margin: 0, maxWidth: '800px', lineHeight: 1.5 }}>
-                  Arsitektur CDN lokal: Seluruh file statis (dokumen/gambar) dilayani langsung oleh <strong>Nginx Edge Cache</strong> (port 8080) dan diteruskan ke <strong>MinIO S3 Storage</strong> (port 9000/9001). Backend app server tidak melayani file statis dari disk lokal.
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-danger-outline"
-                  onClick={handleCleanupTestData}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                  title="Hapus seluruh data dummy testing k6 dari antrean pasien & database"
-                >
-                  <Trash2 size={14} />
-                  <span>Bersihkan Data Testing k6</span>
-                </button>
-                <a
-                  href="http://localhost:9001"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-sm btn-outline"
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
-                >
-                  <ExternalLink size={14} />
-                  <span>Buka MinIO Console (:9001)</span>
-                </a>
-                <button
-                  type="button"
-                  className="btn btn-sm btn-primary"
-                  onClick={loadStorageFiles}
-                  disabled={loadingFiles}
-                  style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#059669', borderColor: '#059669' }}
-                >
-                  <RefreshCw size={14} className={loadingFiles ? 'spin' : ''} />
-                  <span>Refresh Storage</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Verification Info Badges */}
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '18px' }}>
-              <div style={{ background: '#FFFFFF', padding: '8px 14px', borderRadius: '8px', border: '1px solid #D1FAE5', fontSize: '0.8rem', color: '#065F46' }}>
-                🌐 <strong>Edge CDN Node:</strong> Nginx Reverse Proxy (<code>/files/</code>)
-              </div>
-              <div style={{ background: '#FFFFFF', padding: '8px 14px', borderRadius: '8px', border: '1px solid #D1FAE5', fontSize: '0.8rem', color: '#065F46' }}>
-                🗄️ <strong>S3 Bucket:</strong> <code>telemed-files</code> (MinIO/Silo)
-              </div>
-              <div style={{ background: '#FFFFFF', padding: '8px 14px', borderRadius: '8px', border: '1px solid #D1FAE5', fontSize: '0.8rem', color: '#065F46' }}>
-                ⚡ <strong>Cache Policy:</strong> <code>Cache-Control: public, max-age=86400</code>
-              </div>
-              <div style={{ background: '#FFFFFF', padding: '8px 14px', borderRadius: '8px', border: '1px solid #D1FAE5', fontSize: '0.8rem', color: '#065F46' }}>
-                🔍 <strong>Response Header:</strong> <code>X-CDN-Node: telemed-minio-local</code>
-              </div>
-            </div>
-          </div>
-
-          {/* Upload Card */}
-          <div className="card" style={{ padding: '24px' }}>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '6px', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <UploadCloud size={18} color="#2563EB" />
-              Upload Aset ke CDN Storage (Admin)
-            </h3>
-            <p style={{ fontSize: '0.82rem', color: '#64748B', marginBottom: '16px' }}>
-              Unggah file dokumen, hasil lab (PDF), atau gambar medis (JPG, PNG). File otomatis masuk ke MinIO S3 dan disajikan via CDN.
-            </p>
-
-            <FileUpload
-              label="Pilih atau Drop File Aset Medis"
-              onUploaded={() => {
-                loadStorageFiles();
-                showToast('File berhasil diunggah ke CDN & MinIO Storage!', 'success');
-              }}
-            />
-          </div>
-
-          {/* Stored Files Table */}
-          <div className="card" style={{ padding: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FileText size={18} color="#059669" />
-                Daftar File Tersimpan di MinIO S3 & CDN ({cdnFiles.length})
-              </h3>
-              <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
-                Bucket: <strong>telemed-files</strong>
-              </span>
-            </div>
-
-            {loadingFiles ? (
-              <div style={{ textAlign: 'center', padding: '32px', color: '#64748B' }}>Memuat daftar file dari storage...</div>
-            ) : cdnFiles.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748B', background: '#F8FAFC', borderRadius: '12px', border: '1px dashed #CBD5E1' }}>
-                <HardDrive size={36} color="#94A3B8" style={{ margin: '0 auto 10px' }} />
-                <div style={{ fontWeight: 600 }}>Belum ada file di MinIO Storage</div>
-                <div style={{ fontSize: '0.82rem', marginTop: '4px' }}>
-                  Gunakan box upload di atas untuk mengunggah file uji coba pertama Anda.
-                </div>
-              </div>
-            ) : (
-              <div className="table-container">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>No</th>
-                      <th>Object Key (MinIO)</th>
-                      <th>Ukuran</th>
-                      <th>Terakhir Diubah</th>
-                      <th>Akses CDN (Nginx Edge)</th>
-                      <th style={{ textAlign: 'right' }}>Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cdnFiles.map((file, idx) => (
-                      <tr key={file.key}>
-                        <td>{idx + 1}</td>
-                        <td>
-                          <span style={{ fontWeight: 600, color: '#1E293B', fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                            {file.key}
-                          </span>
-                        </td>
-                        <td>{(file.size_bytes / 1024).toFixed(1)} KB</td>
-                        <td style={{ fontSize: '0.8rem', color: '#64748B' }}>
-                          {new Date(file.last_modified).toLocaleString('id-ID')}
-                        </td>
-                        <td>
-                          <a
-                            href={file.cdn_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              color: '#059669',
-                              fontWeight: 600,
-                              textDecoration: 'underline',
-                              fontSize: '0.85rem'
-                            }}
-                          >
-                            <span>{file.cdn_url}</span>
-                            <ExternalLink size={12} />
-                          </a>
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <div style={{ display: 'inline-flex', gap: '6px' }}>
-                            <a
-                              href={file.cdn_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="btn btn-sm btn-outline"
-                              style={{ padding: '4px 10px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                            >
-                              <ExternalLink size={13} />
-                              <span>Buka</span>
-                            </a>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-danger-outline"
-                              onClick={() => handleDeleteFile(file.key)}
-                              style={{ padding: '4px 8px', fontSize: '0.78rem' }}
-                              title="Hapus file dari S3 MinIO"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
         </div>
       )}

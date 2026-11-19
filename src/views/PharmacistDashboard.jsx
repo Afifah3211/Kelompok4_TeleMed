@@ -5,16 +5,11 @@ import {
   CheckCircle2, 
   Clock, 
   Package, 
-  AlertCircle, 
   Search, 
   FileText, 
-  User, 
   Stethoscope, 
-  ChevronRight,
   Plus,
   Minus,
-  Truck,
-  Sparkles,
   RefreshCw
 } from 'lucide-react';
 
@@ -30,9 +25,14 @@ export default function PharmacistDashboard() {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState('resep'); // 'resep' | 'obat'
-  const [filterStatus, setFilterStatus] = useState('Semua');
+  const [queueView, setQueueView] = useState('active'); // 'active' | 'completed'
   const [selectedRx, setSelectedRx] = useState(prescriptions[0] || null);
   const [searchDrug, setSearchDrug] = useState('');
+
+  const isCompleted = (rx) => rx.status.toLowerCase().includes('selesai');
+  const activePrescriptions = prescriptions.filter((rx) => !isCompleted(rx));
+  const completedPrescriptions = prescriptions.filter(isCompleted);
+  const visiblePrescriptions = queueView === 'active' ? activePrescriptions : completedPrescriptions;
 
   useEffect(() => {
     const refresh = () => {
@@ -46,21 +46,17 @@ export default function PharmacistDashboard() {
   }, [refreshPrescriptions]);
 
   useEffect(() => {
-    if (prescriptions.length === 0) {
+    if (visiblePrescriptions.length === 0) {
       setSelectedRx(null);
       return;
     }
-    setSelectedRx((current) => prescriptions.find((rx) => rx.id === current?.id) || prescriptions[0]);
-  }, [prescriptions]);
-
-  const filteredPrescriptions = prescriptions.filter((rx) => {
-    if (filterStatus === 'Semua') return true;
-    return rx.status.toLowerCase().includes(filterStatus.toLowerCase());
-  });
+    setSelectedRx((current) => visiblePrescriptions.find((rx) => rx.id === current?.id) || visiblePrescriptions[0]);
+  }, [prescriptions, queueView]);
 
   const filteredMedicines = medicines.filter((m) =>
     m.name.toLowerCase().includes(searchDrug.toLowerCase()) ||
-    m.category.toLowerCase().includes(searchDrug.toLowerCase())
+    (m.category || '').toLowerCase().includes(searchDrug.toLowerCase()) ||
+    (m.code || '').toLowerCase().includes(searchDrug.toLowerCase())
   );
 
   return (
@@ -81,18 +77,18 @@ export default function PharmacistDashboard() {
 
         <div className="pharma-stats-row">
           <div className="p-stat-card">
-            <span className="p-stat-num">{prescriptions.length}</span>
-            <span className="p-stat-lbl">Total Resep Masuk</span>
+            <span className="p-stat-num">{activePrescriptions.length}</span>
+            <span className="p-stat-lbl">Antrean Aktif</span>
           </div>
           <div className="p-stat-card">
             <span className="p-stat-num text-amber">
-              {prescriptions.filter(p => p.status.includes('Menunggu') || p.status.includes('Diramu')).length}
+              {prescriptions.filter((p) => p.status.includes('Menunggu')).length}
             </span>
-            <span className="p-stat-lbl">Perlu Disiapkan</span>
+            <span className="p-stat-lbl">Menunggu Diracik</span>
           </div>
           <div className="p-stat-card">
             <span className="p-stat-num text-emerald">
-              {prescriptions.filter(p => p.status.includes('Selesai')).length}
+              {completedPrescriptions.length}
             </span>
             <span className="p-stat-lbl">Resep Selesai</span>
           </div>
@@ -106,7 +102,7 @@ export default function PharmacistDashboard() {
           onClick={() => setActiveTab('resep')}
         >
           <FileText size={16} />
-          <span>Antrean Resep Digital ({prescriptions.length})</span>
+          <span>Antrean Resep Digital ({activePrescriptions.length})</span>
         </button>
 
         <button
@@ -123,32 +119,28 @@ export default function PharmacistDashboard() {
         <div className="pharma-content-split">
           {/* Left: Prescription list */}
           <div className="pharma-list-col">
-            <div className="filter-bar">
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569' }}>Filter Status:</span>
+            <div className="filter-bar pharmacist-queue-toolbar">
+              <div className="queue-view-switch" aria-label="Tampilan antrean resep">
+                <button type="button" className={`filter-chip ${queueView === 'active' ? 'active' : ''}`} onClick={() => setQueueView('active')}>
+                  Antrean aktif ({activePrescriptions.length})
+                </button>
+                <button type="button" className={`filter-chip ${queueView === 'completed' ? 'active' : ''}`} onClick={() => setQueueView('completed')}>
+                  Riwayat diserahkan ({completedPrescriptions.length})
+                </button>
+              </div>
               <button type="button" className="btn btn-outline btn-sm" onClick={() => refreshPrescriptions().catch((error) => showToast(error.message || 'Gagal memperbarui antrean resep.', 'danger'))}>
                 <RefreshCw size={14} /> Segarkan
               </button>
-              <div className="filter-chips">
-                {['Semua', 'Menunggu', 'Diramu', 'Selesai'].map((st) => (
-                  <button
-                    key={st}
-                    className={`filter-chip ${filterStatus === st ? 'active' : ''}`}
-                    onClick={() => setFilterStatus(st)}
-                  >
-                    {st}
-                  </button>
-                ))}
-              </div>
             </div>
 
             <div className="rx-cards-stack">
-              {filteredPrescriptions.length === 0 ? (
+              {visiblePrescriptions.length === 0 ? (
                 <div className="empty-state-box">
                   <Clock size={32} color="#94A3B8" />
-                  <p>Tidak ada resep pada kategori ini.</p>
+                  <p>{queueView === 'active' ? 'Tidak ada resep yang perlu diproses.' : 'Belum ada resep yang diserahkan.'}</p>
                 </div>
               ) : (
-                filteredPrescriptions.map((rx) => (
+                visiblePrescriptions.map((rx) => (
                   <div
                     key={rx.id}
                     className={`rx-item-card ${selectedRx?.id === rx.id ? 'selected' : ''}`}
@@ -254,28 +246,34 @@ export default function PharmacistDashboard() {
                   )}
                 </div>
 
-                <div className="pharmacist-workflow-actions">
-                  <h4 style={{ fontSize: '0.9rem', marginBottom: '10px' }}>Ubah Status Pengerjaan Obat:</h4>
-                  <div className="workflow-buttons">
-                    <button
-                      className="btn btn-outline"
-                      onClick={() => updatePrescriptionStatus(selectedRx.id, 'Sedang Diramu', 'Obat sedang disiapkan di instalasi farmasi.')}
-                      disabled={selectedRx.status !== 'Menunggu Penyiapan'}
-                    >
-                      <Clock size={16} />
-                      <span>Sedang Diramu</span>
-                    </button>
+                {!isCompleted(selectedRx) ? (
+                  <div className="pharmacist-workflow-actions">
+                    <h4 style={{ fontSize: '0.9rem', marginBottom: '10px' }}>Ubah Status Pengerjaan Obat:</h4>
+                    <div className="workflow-buttons">
+                      <button
+                        className="btn btn-outline"
+                        onClick={() => updatePrescriptionStatus(selectedRx.id, 'Sedang Diramu', 'Obat sedang disiapkan di instalasi farmasi.')}
+                        disabled={selectedRx.status !== 'Menunggu Penyiapan'}
+                      >
+                        <Clock size={16} />
+                        <span>Sedang Diramu</span>
+                      </button>
 
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => updatePrescriptionStatus(selectedRx.id, 'Selesai / Sudah Diambil', 'Obat telah diserahkan lengkap dengan etiket pemakaian.')}
-                      disabled={selectedRx.status !== 'Sedang Diramu'}
-                    >
-                      <CheckCircle2 size={16} />
-                      <span>Tandai Sudah Diserahkan</span>
-                    </button>
+                      <button
+                        className="btn btn-primary"
+                        onClick={() => updatePrescriptionStatus(selectedRx.id, 'Selesai / Sudah Diambil', 'Obat telah diserahkan lengkap dengan etiket pemakaian.')}
+                        disabled={selectedRx.status !== 'Sedang Diramu'}
+                      >
+                        <CheckCircle2 size={16} />
+                        <span>Tandai Sudah Diserahkan</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="prescription-completed-note">
+                    <CheckCircle2 size={17} /> Resep ini sudah diserahkan. Riwayat hanya dapat dilihat dan stoknya telah diperbarui.
+                  </div>
+                )}
 
                 <div className="audit-trace-note">
                   <small>
@@ -306,16 +304,26 @@ export default function PharmacistDashboard() {
                 onChange={(e) => setSearchDrug(e.target.value)}
               />
             </div>
-            <button
-              className="btn btn-outline btn-sm"
-              onClick={() => showToast('Katalog obat terintegrasi dengan database klinik.', 'info')}
-            >
-              Sinkronisasi Database Obat
-            </button>
+            <span className="inventory-result-count">Menampilkan {filteredMedicines.length} dari {medicines.length} obat</span>
+          </div>
+
+          <div className="inventory-guidance">
+            <Package size={16} />
+            <span>Stok memakai satuan pada kolom obat; angka di bawah 100 ditandai rendah. Tombol +/− mengubah stok sebanyak 10 satuan.</span>
           </div>
 
           <div className="table-responsive">
             <table className="med-inventory-table">
+              <colgroup>
+                <col className="inventory-col-code" />
+                <col className="inventory-col-name" />
+                <col className="inventory-col-category" />
+                <col className="inventory-col-form" />
+                <col className="inventory-col-dosage" />
+                <col className="inventory-col-price" />
+                <col className="inventory-col-stock" />
+                <col className="inventory-col-actions" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Kode</th>
@@ -333,16 +341,16 @@ export default function PharmacistDashboard() {
                   <tr key={med.id}>
                     <td><code>{med.id}</code></td>
                     <td>
-                      <strong>{med.name}</strong>
-                      <small className="block text-muted">{med.description}</small>
+                      <div className="medicine-name">{med.name}</div>
+                      {med.description && <div className="medicine-description">{med.description}</div>}
                     </td>
                     <td><span className="cat-badge">{med.category}</span></td>
                     <td>{med.form}</td>
-                    <td><small>{med.dosage}</small></td>
-                    <td><strong>Rp {med.price.toLocaleString('id-ID')}</strong> <small>/{med.unit}</small></td>
+                    <td><span className="medicine-dosage">{med.dosage}</span></td>
+                    <td><strong>Rp {Number(med.price || 0).toLocaleString('id-ID')}</strong><span className="medicine-unit">/{med.unit}</span></td>
                     <td>
                       <span className={`stock-badge ${med.stock < 100 ? 'stock-low' : 'stock-ok'}`}>
-                        {med.stock} {med.unit}
+                        {med.stock} <span>{med.unit}</span>
                       </span>
                     </td>
                     <td>
@@ -350,14 +358,17 @@ export default function PharmacistDashboard() {
                         <button
                           className="btn-stock-adjust dec"
                           onClick={() => updateMedicineStock(med.id, -10)}
-                          title="Kurangi 10"
+                          title={`Kurangi 10 ${med.unit}`}
+                          aria-label={`Kurangi stok ${med.name} sebanyak 10 ${med.unit}`}
+                          disabled={med.stock < 10}
                         >
                           <Minus size={14} />
                         </button>
                         <button
                           className="btn-stock-adjust inc"
                           onClick={() => updateMedicineStock(med.id, 10)}
-                          title="Tambah 10"
+                          title={`Tambah 10 ${med.unit}`}
+                          aria-label={`Tambah stok ${med.name} sebanyak 10 ${med.unit}`}
                         >
                           <Plus size={14} />
                         </button>
@@ -365,6 +376,11 @@ export default function PharmacistDashboard() {
                     </td>
                   </tr>
                 ))}
+                {filteredMedicines.length === 0 && (
+                  <tr>
+                    <td colSpan="8" className="inventory-empty-cell">Tidak ada obat yang cocok dengan pencarian.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

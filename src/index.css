@@ -997,6 +997,109 @@ h1, h2, h3, h4, h5, h6 {
   padding: 20px 0;
 }
 
+.hero-visual {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+}
+
+.health-illustration {
+  position: relative;
+  display: grid;
+  width: min(100%, 470px);
+  height: 420px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 46% 54% 52% 48% / 46% 45% 55% 54%;
+  background: linear-gradient(145deg, #EAF3FF 0%, #F3FAFF 48%, #E2F7F3 100%);
+}
+
+.health-illustration-orbit {
+  position: absolute;
+  border: 1px solid rgba(37, 99, 235, 0.12);
+  border-radius: 50%;
+}
+
+.orbit-outer {
+  width: 330px;
+  height: 330px;
+}
+
+.orbit-inner {
+  width: 250px;
+  height: 250px;
+  border-color: rgba(15, 118, 110, 0.16);
+}
+
+.health-illustration-glow {
+  position: absolute;
+  width: 190px;
+  height: 190px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #BFDBFE, #CCFBF1);
+  box-shadow: 0 22px 55px rgba(37, 99, 235, 0.12);
+}
+
+.health-illustration-icon {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 156px;
+  height: 156px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.82);
+  color: #1769AA;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.1);
+}
+
+.health-illustration-pulse {
+  position: absolute;
+  z-index: 2;
+  right: 24%;
+  bottom: 24%;
+  display: grid;
+  width: 64px;
+  height: 64px;
+  place-items: center;
+  border: 5px solid #F5FAFF;
+  border-radius: 20px;
+  background: #0F8B82;
+  color: #FFFFFF;
+  box-shadow: 0 10px 24px rgba(15, 118, 110, 0.2);
+}
+
+.health-illustration-plus {
+  position: absolute;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 14px;
+  background: #FFFFFF;
+  color: #2563EB;
+  font-size: 1.5rem;
+  font-weight: 500;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.09);
+}
+
+.plus-one { top: 22%; left: 23%; }
+.plus-two { right: 19%; top: 25%; width: 32px; height: 32px; color: #0F766E; }
+
+.health-illustration-caption {
+  position: absolute;
+  bottom: 12%;
+  left: 50%;
+  color: #45627F;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  transform: translateX(-50%);
+  text-transform: uppercase;
+}
+
 .hero-pill {
   display: inline-flex;
   align-items: center;
@@ -1299,7 +1402,7 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 0.88rem;
   color: #64748B;
   line-height: 1.5;
-  margin-bottom: 16px;
+  margin-bottom: 0;
 }
 
 .feature-list {
@@ -1403,6 +1506,36 @@ h1, h2, h3, h4, h5, h6 {
   color: #64748B;
 }
 
+.care-steps-section .team-header {
+  align-items: flex-start;
+}
+
+.care-steps-title {
+  margin-top: 10px;
+  color: #0F172A;
+  font-size: 1.4rem;
+}
+
+.care-steps-description {
+  margin-top: 5px;
+  color: #64748B;
+  font-size: 0.9rem;
+}
+
+.care-step-card {
+  align-items: flex-start;
+  background: #FFFFFF;
+}
+
+.care-step-card .member-avatar {
+  flex: 0 0 44px;
+}
+
+.care-step-card .member-info span {
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
 .member-role {
   color: #0F766E !important;
   font-weight: 600;
@@ -1444,6 +1577,10 @@ h1, h2, h3, h4, h5, h6 {
   }
   .metric-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .health-illustration {
+    width: min(100%, 390px);
+    height: 350px;
   }
 }
 
@@ -1667,6 +1804,16 @@ h1, h2, h3, h4, h5, h6 {
   gap: 4px;
 }
 
+.pharmacist-queue-toolbar {
+  align-items: center;
+}
+
+.queue-view-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .filter-chip {
   padding: 4px 8px;
   border-radius: 6px;
@@ -1846,6 +1993,20 @@ h1, h2, h3, h4, h5, h6 {
   color: #64748B;
 }
 
+.prescription-completed-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 12px 14px;
+  border: 1px solid #A7F3D0;
+  border-radius: 10px;
+  background: #ECFDF5;
+  color: #047857;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
 .pharma-inventory-view {
   background: #FFFFFF;
   border: 1px solid #E2E8F0;
@@ -1860,6 +2021,31 @@ h1, h2, h3, h4, h5, h6 {
   margin-bottom: 20px;
   gap: 14px;
   flex-wrap: wrap;
+}
+
+.inventory-result-count {
+  color: #64748B;
+  font-size: 0.82rem;
+}
+
+.inventory-guidance {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: -4px 0 16px;
+  padding: 10px 12px;
+  border: 1px solid #DBEAFE;
+  border-radius: 8px;
+  background: #EFF6FF;
+  color: #1E40AF;
+  font-size: 0.8rem;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
 }
 
 .search-box-pill {
@@ -1883,9 +2069,20 @@ h1, h2, h3, h4, h5, h6 {
 
 .med-inventory-table {
   width: 100%;
+  min-width: 1120px;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 0.85rem;
 }
+
+.inventory-col-code { width: 62px; }
+.inventory-col-name { width: 250px; }
+.inventory-col-category { width: 142px; }
+.inventory-col-form { width: 105px; }
+.inventory-col-dosage { width: 205px; }
+.inventory-col-price { width: 145px; }
+.inventory-col-stock { width: 150px; }
+.inventory-col-actions { width: 105px; }
 
 .med-inventory-table th {
   background: #F8FAFC;
@@ -1900,6 +2097,48 @@ h1, h2, h3, h4, h5, h6 {
 .med-inventory-table td {
   padding: 12px 14px;
   border-bottom: 1px solid #F1F5F9;
+  color: #1E293B;
+  line-height: 1.45;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.med-inventory-table th {
+  white-space: normal;
+  line-height: 1.35;
+  vertical-align: bottom;
+}
+
+.medicine-name {
+  color: #0F172A;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.medicine-description {
+  display: block;
+  margin-top: 4px;
+  color: #64748B;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.medicine-dosage {
+  display: block;
+  color: #475569;
+  font-size: 0.78rem;
+}
+
+.medicine-unit {
+  margin-left: 3px;
+  color: #64748B;
+  font-size: 0.75rem;
+}
+
+.inventory-empty-cell {
+  padding: 32px !important;
+  color: #64748B !important;
+  text-align: center;
 }
 
 .cat-badge {
@@ -1912,10 +2151,15 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .stock-badge {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px;
   padding: 3px 10px;
   border-radius: 9999px;
   font-size: 0.78rem;
   font-weight: 700;
+  white-space: normal;
 }
 
 .stock-ok {
@@ -1953,6 +2197,11 @@ h1, h2, h3, h4, h5, h6 {
 .btn-stock-adjust:hover {
   background: #F1F5F9;
   border-color: #94A3B8;
+}
+
+.btn-stock-adjust:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .status-pill {

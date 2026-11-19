@@ -12,7 +12,6 @@ import TeleconsultationModal from './components/TeleconsultationModal';
 import BookingModal from './components/BookingModal';
 import EMRDetailModal from './components/EMRDetailModal';
 import Toast from './components/Toast';
-import { ShieldCheck } from 'lucide-react';
 
 export default function App() {
   const { currentPage, currentUser } = useApp();
@@ -71,18 +70,7 @@ export default function App() {
           }}
         >
           <div>
-            <strong>TeleMed Healthcare Systems</strong> • Platform Layanan Telemedis Terintegrasi & Cloud Disaster Recovery
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <ShieldCheck size={14} color="#0F766E" /> Keamanan Data & Audit Log Aktif
-            </span>
-            <span>•</span>
-            <span>RTO &le; 30 Menit (Target PITR)</span>
-            <span>•</span>
-            <span>RPO &le; 1 Menit (WAL Archiving)</span>
-            <span>•</span>
-            <span>Aturan Backup 3-2-1 Berlapis</span>
+          <strong>TeleMed</strong> • Layanan konsultasi kesehatan online
           </div>
         </div>
       </footer>
