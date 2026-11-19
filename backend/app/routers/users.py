@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.audit import audit
 from app.db import execute, fetch_all, fetch_one, transaction
+from app.normalization import normalize_gender
 from app.security import (
     get_current_user,
     hash_password,
@@ -20,6 +21,19 @@ class CreateDoctorRequest(BaseModel):
     fullName: str
     specialization: Optional[str] = None
     strNumber: Optional[str] = None
+
+
+class CreatePatientRequest(BaseModel):
+    username: str
+    password: str
+    fullName: str
+    nik: Optional[str] = None
+    birthDate: Optional[date] = None
+    gender: Optional[str] = None
+    phone: Optional[str] = None
+    address: Optional[str] = None
+    bloodType: Optional[str] = None
+    allergies: Optional[str] = None
 
 
 class UpdateProfileRequest(BaseModel):
@@ -156,6 +170,90 @@ async def create_doctor(
     return {"user": user_row, "doctor": doctor_row}
 
 
+@router.post("/patient", status_code=status.HTTP_201_CREATED)
+async def create_patient(
+    req: CreatePatientRequest,
+    request: Request,
+    current_user: dict[str, Any] = Depends(require_roles("admin")),
+):
+    """Admin membuat akun pasien dan profil pasien dalam satu transaksi."""
+    username = req.username.strip()
+    full_name = req.fullName.strip()
+    nik = req.nik.strip() if req.nik else None
+
+    if not username or not full_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email dan nama lengkap wajib diisi",
+        )
+    if len(req.password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password minimal 8 karakter",
+        )
+    gender = normalize_gender(req.gender)
+    if req.gender and req.gender.strip() != "-" and gender is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Jenis kelamin harus Laki-laki atau Perempuan",
+        )
+    if nik and len(nik) > 16:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="NIK maksimal 16 karakter",
+        )
+
+    existing_user = await fetch_one("SELECT id FROM users WHERE username = %s", (username,))
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email sudah digunakan oleh akun lain",
+        )
+
+    hashed_pwd = await hash_password(req.password)
+    async with transaction() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                """
+                INSERT INTO users (username, password_hash, role, is_active)
+                VALUES (%s, %s, 'pasien', TRUE)
+                RETURNING id, username, role, is_active, created_at;
+                """,
+                (username, hashed_pwd),
+            )
+            user_row = await cur.fetchone()
+            await cur.execute(
+                """
+                INSERT INTO patients (
+                    user_id, nik, full_name, birth_date, gender, phone,
+                    address, blood_type, allergies
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, user_id, nik, full_name, birth_date, gender,
+                          phone, address, blood_type, allergies;
+                """,
+                (
+                    user_row["id"], nik, full_name, req.birthDate, gender,
+                    req.phone.strip() if req.phone else None,
+                    req.address.strip() if req.address else None,
+                    req.bloodType.strip() if req.bloodType else None,
+                    req.allergies.strip() if req.allergies else None,
+                ),
+            )
+            patient_row = await cur.fetchone()
+
+    await audit(
+        request=request,
+        user=current_user,
+        action="CREATE",
+        table="users",
+        record_id=user_row["id"],
+        severity="success",
+        details=f"Admin mendaftarkan pasien baru: {full_name} ({username}).",
+    )
+    return {"user": user_row, "patient": patient_row}
+
+
 @router.patch("/{id}/toggle")
 @router.patch("/{id}/toggle-status")
 async def toggle_user_active(
@@ -215,13 +313,19 @@ async def update_user_profile(
 
     role = user["role"]
     if role == "pasien":
+        gender = normalize_gender(req.gender)
+        if req.gender and req.gender.strip() != "-" and gender is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Jenis kelamin harus Laki-laki atau Perempuan",
+            )
         await execute(
             """
             UPDATE patients
             SET full_name = COALESCE(%s, full_name),
                 nik = COALESCE(%s, nik),
                 birth_date = COALESCE(%s, birth_date),
-                gender = COALESCE(%s, gender),
+                gender = CASE WHEN %s = '-' THEN NULL ELSE COALESCE(%s, gender) END,
                 phone = COALESCE(%s, phone),
                 address = COALESCE(%s, address),
                 blood_type = COALESCE(%s, blood_type),
@@ -232,7 +336,8 @@ async def update_user_profile(
                 req.fullName.strip() if req.fullName else None,
                 req.nik.strip() if req.nik else None,
                 req.birthDate,
-                req.gender,
+                req.gender.strip() if req.gender else None,
+                gender,
                 req.phone.strip() if req.phone else None,
                 req.address.strip() if req.address else None,
                 req.bloodType.strip() if req.bloodType else None,

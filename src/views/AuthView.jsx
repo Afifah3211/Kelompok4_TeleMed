@@ -29,7 +29,12 @@ export default function AuthView() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [nik, setNik] = useState('');
+  const [birthDate, setBirthDate] = useState('');
+  const [gender, setGender] = useState('');
   const [phone, setPhone] = useState('');
+  const [bloodType, setBloodType] = useState('');
+  const [allergies, setAllergies] = useState('');
+  const [address, setAddress] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleFillDemo = (demoEmail, demoRole) => {
@@ -44,7 +49,7 @@ export default function AuthView() {
     if (isLoading) return;
 
     if (authMode === 'register') {
-      if (!fullName.trim() || !email.trim() || !password.trim()) {
+      if (!fullName.trim() || !email.trim() || !password.trim() || !gender || !phone.trim() || !bloodType.trim() || !allergies.trim() || !address.trim()) {
         showToast('Harap lengkapi semua field yang wajib diisi.', 'danger');
         return;
       }
@@ -60,7 +65,12 @@ export default function AuthView() {
           username: email.trim(),
           password: password.trim(),
           nik: nik.trim() || undefined,
-          phone: phone.trim() || undefined
+          birthDate: birthDate || null,
+          gender,
+          phone: phone.trim(),
+          bloodType: bloodType.trim(),
+          allergies: allergies.trim(),
+          address: address.trim()
         });
       } catch (err) {
         // error sudah ditangani / ditampilkan via toast di AppContext
@@ -211,7 +221,76 @@ export default function AuthView() {
                     onChange={(e) => setNik(e.target.value)}
                     maxLength={16}
                   />
+                  <small className="form-hint">Opsional. Jika belum tersedia, boleh dikosongkan.</small>
                 </div>
+              )}
+
+              {authMode === 'register' && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Tanggal Lahir (opsional)</label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={birthDate}
+                      onChange={(e) => setBirthDate(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Jenis Kelamin</label>
+                    <select className="form-select" value={gender} onChange={(e) => setGender(e.target.value)} required>
+                      <option value="">Pilih jenis kelamin</option>
+                      <option value="L">Laki-laki</option>
+                      <option value="P">Perempuan</option>
+                      <option value="-">- (Tidak dicantumkan)</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Telepon / WhatsApp</label>
+                    <input
+                      type="tel"
+                      className="form-input"
+                      placeholder="Masukkan nomor, atau - jika tidak ada"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Golongan Darah</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Contoh: O+, atau - jika tidak diketahui"
+                      value={bloodType}
+                      onChange={(e) => setBloodType(e.target.value)}
+                      maxLength={3}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Alergi</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Tuliskan alergi, atau - jika tidak ada/belum diketahui"
+                      value={allergies}
+                      onChange={(e) => setAllergies(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Alamat Domisili</label>
+                    <textarea
+                      className="form-textarea"
+                      placeholder="Masukkan alamat, atau - jika tidak ingin dicantumkan"
+                      value={address}
+                      onChange={(e) => setAddress(e.target.value)}
+                      rows={2}
+                      required
+                    />
+                  </div>
+                </>
               )}
 
               <div className="form-group">

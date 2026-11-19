@@ -50,15 +50,21 @@ export default function AdminAuditLogs() {
 
   // User creation modal
   const [isAddUserOpen, setIsAddUserOpen] = useState(false);
+  const [isSavingUser, setIsSavingUser] = useState(false);
   const [newUserForm, setNewUserForm] = useState({
     name: '',
     email: '',
+    password: '',
     role: 'dokter',
     nik: '',
+    birthDate: '',
+    gender: '',
     specialty: '',
     sip: '',
     hospital: '',
     phone: '',
+    bloodType: '',
+    allergies: '',
     address: ''
   });
 
@@ -81,24 +87,44 @@ export default function AdminAuditLogs() {
     return matchesSearch && matchesDate && matchesAction;
   });
 
-  const handleCreateUser = (e) => {
+  const handleCreateUser = async (e) => {
     e.preventDefault();
     if (!newUserForm.name || !newUserForm.email) {
       showToast('Harap isi nama dan email.', 'danger');
       return;
     }
+    if (!newUserForm.password || newUserForm.password.length < 8) {
+      showToast('Kata sandi awal minimal 8 karakter.', 'danger');
+      return;
+    }
+    if (newUserForm.role === 'pasien') {
+      const requiredPatientInfo = [newUserForm.gender, newUserForm.phone, newUserForm.bloodType, newUserForm.allergies, newUserForm.address];
+      if (requiredPatientInfo.some((value) => !value?.trim())) {
+        showToast('Lengkapi data pasien. Jika tidak ada, masukkan tanda - pada kolom tersebut.', 'danger');
+        return;
+      }
+    }
 
-    addUser(newUserForm);
+    setIsSavingUser(true);
+    const created = await addUser(newUserForm);
+    setIsSavingUser(false);
+    if (!created) return;
+
     setIsAddUserOpen(false);
     setNewUserForm({
       name: '',
       email: '',
+      password: '',
       role: 'dokter',
       nik: '',
+      birthDate: '',
+      gender: '',
       specialty: '',
       sip: '',
       hospital: '',
       phone: '',
+      bloodType: '',
+      allergies: '',
       address: ''
     });
   };
@@ -488,7 +514,7 @@ export default function AdminAuditLogs() {
                     <td style={{ textAlign: 'right' }}>
                       <button
                         className="btn btn-outline btn-sm"
-                        onClick={() => toggleUserStatus(doc.id)}
+                        onClick={() => toggleUserStatus(doc.userId || doc.id)}
                       >
                         {doc.status === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan'}
                       </button>
@@ -555,13 +581,13 @@ export default function AdminAuditLogs() {
                         </div>
                       </div>
                     </td>
-                    <td><code>{p.nik}</code></td>
-                    <td>{p.gender || 'Laki-laki'}</td>
+                    <td><code>{p.nik || '-'}</code></td>
+                    <td>{p.gender || '-'}</td>
                     <td>{p.phone || '-'}</td>
                     <td>
-                      <div><strong>{p.bloodType || 'O+'}</strong></div>
-                      <small style={{ color: p.allergies && p.allergies !== 'Tidak Ada' ? '#DC2626' : '#64748B' }}>
-                        Alergi: {p.allergies || 'Tidak Ada'}
+                      <div><strong>{p.bloodType || '-'}</strong></div>
+                      <small style={{ color: p.allergies && p.allergies !== '-' && p.allergies !== 'Tidak Ada' ? '#DC2626' : '#64748B' }}>
+                        Alergi: {p.allergies || '-'}
                       </small>
                     </td>
                     <td style={{ maxWidth: '200px', fontSize: '0.82rem' }}>{p.address || '-'}</td>
@@ -573,7 +599,7 @@ export default function AdminAuditLogs() {
                     <td style={{ textAlign: 'right' }}>
                       <button
                         className="btn btn-outline btn-sm"
-                        onClick={() => toggleUserStatus(p.id)}
+                        onClick={() => toggleUserStatus(p.userId || p.id)}
                       >
                         {p.status === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan'}
                       </button>
@@ -877,7 +903,6 @@ export default function AdminAuditLogs() {
                   >
                     <option value="dokter">Dokter</option>
                     <option value="pasien">Pasien</option>
-                    <option value="admin">Admin IT / Klinik</option>
                   </select>
                 </div>
 
@@ -901,6 +926,20 @@ export default function AdminAuditLogs() {
                     onChange={(e) => setNewUserForm({ ...newUserForm, email: e.target.value })}
                     required
                   />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Kata Sandi Awal</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    value={newUserForm.password}
+                    onChange={(e) => setNewUserForm({ ...newUserForm, password: e.target.value })}
+                    minLength={8}
+                    autoComplete="new-password"
+                    required
+                  />
+                  <small className="form-hint">Minimal 8 karakter. Sampaikan kata sandi ini dengan aman kepada pengguna.</small>
                 </div>
 
                 {newUserForm.role === 'dokter' ? (
@@ -927,15 +966,88 @@ export default function AdminAuditLogs() {
                     </div>
                   </>
                 ) : (
-                  <div className="form-group">
-                    <label className="form-label">Nomor Induk Kependudukan (NIK)</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={newUserForm.nik}
-                      onChange={(e) => setNewUserForm({ ...newUserForm, nik: e.target.value })}
-                    />
-                  </div>
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Nomor Induk Kependudukan (NIK)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={newUserForm.nik}
+                        onChange={(e) => setNewUserForm({ ...newUserForm, nik: e.target.value })}
+                        maxLength={16}
+                        inputMode="numeric"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Tanggal Lahir</label>
+                      <input
+                        type="date"
+                        className="form-input"
+                        value={newUserForm.birthDate}
+                        onChange={(e) => setNewUserForm({ ...newUserForm, birthDate: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Jenis Kelamin</label>
+                      <select
+                        className="form-select"
+                        value={newUserForm.gender}
+                        onChange={(e) => setNewUserForm({ ...newUserForm, gender: e.target.value })}
+                        required
+                      >
+                        <option value="">Pilih jenis kelamin</option>
+                        <option value="L">Laki-laki</option>
+                        <option value="P">Perempuan</option>
+                        <option value="-">- (Tidak dicantumkan)</option>
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Telepon / WhatsApp</label>
+                      <input
+                        type="tel"
+                        className="form-input"
+                        placeholder="Nomor telepon, atau - jika tidak ada"
+                        value={newUserForm.phone}
+                        onChange={(e) => setNewUserForm({ ...newUserForm, phone: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Golongan Darah</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Contoh: O+, atau - jika tidak diketahui"
+                        value={newUserForm.bloodType}
+                        onChange={(e) => setNewUserForm({ ...newUserForm, bloodType: e.target.value })}
+                        maxLength={3}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Alergi</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="Tuliskan alergi, atau - jika tidak ada/belum diketahui"
+                        value={newUserForm.allergies}
+                        onChange={(e) => setNewUserForm({ ...newUserForm, allergies: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Alamat Domisili</label>
+                      <textarea
+                        className="form-textarea"
+                        placeholder="Masukkan alamat, atau - jika tidak ada"
+                        value={newUserForm.address}
+                        onChange={(e) => setNewUserForm({ ...newUserForm, address: e.target.value })}
+                        rows={2}
+                        required
+                      />
+                    </div>
+                    <small className="form-hint">Jenis kelamin, telepon, golongan darah, alergi, dan alamat wajib diisi. Ketik atau pilih - jika datanya tidak ada.</small>
+                  </>
                 )}
               </div>
 
@@ -947,8 +1059,8 @@ export default function AdminAuditLogs() {
                 >
                   Batal
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  Simpan Akun
+                <button type="submit" className="btn btn-primary" disabled={isSavingUser}>
+                  {isSavingUser ? 'Menyimpan...' : 'Simpan Akun'}
                 </button>
               </div>
             </form>

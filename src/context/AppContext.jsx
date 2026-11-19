@@ -44,13 +44,13 @@ function buildCurrentUser(user, profile) {
     name: p.full_name || user.username,
     fullName: p.full_name || user.username,
     email: user.username,
-    nik: p.nik || '',
-    phone: p.phone || '',
+    nik: p.nik || '-',
+    phone: p.phone || '-',
     birthDate: p.birth_date || '',
-    gender: p.gender || '',
-    address: p.address || '',
-    bloodType: p.blood_type || '',
-    allergies: p.allergies || '',
+    gender: p.gender === 'L' ? 'Laki-laki' : p.gender === 'P' ? 'Perempuan' : '-',
+    address: p.address || '-',
+    bloodType: p.blood_type || '-',
+    allergies: p.allergies || '-',
     specialization: p.specialization || '',
     specialty: p.specialization || (role === 'dokter' ? 'Dokter Spesialis' : ''),
     strNumber: p.str_number || '',
@@ -90,7 +90,7 @@ function normalizeConsultation(c) {
     patientName: c.patient_name || 'Pasien',
     patientNik: c.patient_nik || '',
     patientPhone: c.patient_phone || '',
-    patientGender: c.patient_gender === 'L' ? 'Laki-laki' : c.patient_gender === 'P' ? 'Perempuan' : '',
+    patientGender: c.patient_gender === 'L' ? 'Laki-laki' : c.patient_gender === 'P' ? 'Perempuan' : '-',
     patientAge: calculateAge(c.patient_birth_date),
     doctorId: c.doctor_id,
     doctorName: c.doctor_name || 'Dokter',
@@ -115,7 +115,7 @@ function normalizeEMR(e) {
     patientId: e.patient_id,
     patientName: e.patient_name || 'Pasien',
     patientNik: e.patient_nik || '',
-    patientGender: e.patient_gender === 'L' ? 'Laki-laki' : e.patient_gender === 'P' ? 'Perempuan' : '',
+    patientGender: e.patient_gender === 'L' ? 'Laki-laki' : e.patient_gender === 'P' ? 'Perempuan' : '-',
     patientAge: calculateAge(e.patient_birth_date),
     doctorId: e.doctor_id,
     doctorName: e.doctor_name || 'Dokter',
@@ -267,13 +267,13 @@ export function AppProvider({ children }) {
           userId: p.user_id,
           name: p.full_name,
           role: 'pasien',
-          nik: p.nik || '',
-          phone: p.phone || '',
+          nik: p.nik || '-',
+          phone: p.phone || '-',
           birthDate: p.birth_date || '',
-          gender: p.gender || 'Laki-laki',
-          address: p.address || '',
-          bloodType: p.blood_type || 'O+',
-          allergies: p.allergies || 'Tidak Ada',
+          gender: p.gender === 'L' ? 'Laki-laki' : p.gender === 'P' ? 'Perempuan' : '-',
+          address: p.address || '-',
+          bloodType: p.blood_type || '-',
+          allergies: p.allergies || '-',
           avatar: getDefaultAvatar('pasien', p.full_name),
           status: p.is_active ? 'Aktif' : 'Nonaktif',
         }));
@@ -442,11 +442,11 @@ export function AppProvider({ children }) {
         password: patientData.password,
         nik: patientData.nik,
         phone: patientData.phone,
-        birthDate: patientData.birthDate || '1995-01-01',
-        gender: patientData.gender || 'Laki-laki',
-        address: patientData.address || 'Bandung, Jawa Barat',
-        bloodType: patientData.bloodType || 'O+',
-        allergies: patientData.allergies || 'Tidak Ada'
+        birthDate: patientData.birthDate || null,
+        gender: patientData.gender,
+        address: patientData.address,
+        bloodType: patientData.bloodType,
+        allergies: patientData.allergies
       });
 
       // Otomatis login setelah registrasi
@@ -693,32 +693,73 @@ export function AppProvider({ children }) {
     }
   };
 
-  // Add new Doctor User (Admin)
+  // Admin creates a user and its matching clinical profile.
   const addUser = async (newUser) => {
     try {
-      const res = await usersApi.createDoctor({
+      const payload = {
         username: newUser.email.trim(),
-        password: 'medisync2026',
+        password: newUser.password,
         fullName: newUser.name.trim(),
-        specialization: newUser.specialty || 'Dokter Umum',
-        strNumber: newUser.sip || '446/MED/2026'
-      });
-
-      const newDoc = {
-        id: res.doctor?.id || res.user?.id,
-        userId: res.user?.id,
-        name: newUser.name,
-        role: 'dokter',
-        specialty: newUser.specialty || 'Dokter Umum',
-        sip: newUser.sip || '446/MED/2026',
-        avatar: getDefaultAvatar('dokter', newUser.name),
-        status: 'Aktif'
       };
 
-      setUsers((prev) => [...prev, newDoc]);
-      showToast(`Dokter ${newUser.name} berhasil didaftarkan!`, 'success');
+      if (newUser.role === 'pasien') {
+        const res = await usersApi.createPatient({
+          ...payload,
+          nik: newUser.nik.trim() || null,
+          birthDate: newUser.birthDate || null,
+          gender: newUser.gender,
+          phone: newUser.phone.trim(),
+          address: newUser.address.trim(),
+          bloodType: newUser.bloodType.trim(),
+          allergies: newUser.allergies.trim(),
+        });
+        const patient = res.patient;
+        setUsers((prev) => [...prev, {
+          id: patient.id,
+          userId: res.user.id,
+          name: patient.full_name,
+          email: res.user.username,
+          role: 'pasien',
+          nik: patient.nik || '-',
+          phone: patient.phone || '-',
+          birthDate: patient.birth_date || '',
+          gender: patient.gender === 'L' ? 'Laki-laki' : patient.gender === 'P' ? 'Perempuan' : '-',
+          address: patient.address || '-',
+          bloodType: patient.blood_type || '-',
+          allergies: patient.allergies || '-',
+          avatar: getDefaultAvatar('pasien', patient.full_name),
+          status: res.user.is_active ? 'Aktif' : 'Nonaktif',
+        }]);
+        showToast(`Pasien ${patient.full_name} berhasil didaftarkan.`, 'success');
+        return true;
+      }
+
+      if (newUser.role === 'dokter') {
+        const res = await usersApi.createDoctor({
+          ...payload,
+          specialization: newUser.specialty || 'Dokter Umum',
+          strNumber: newUser.sip || '446/MED/2026'
+        });
+        const doctor = {
+          id: res.doctor?.id || res.user?.id,
+          userId: res.user?.id,
+          name: newUser.name,
+          role: 'dokter',
+          specialty: newUser.specialty || 'Dokter Umum',
+          sip: newUser.sip || '446/MED/2026',
+          avatar: getDefaultAvatar('dokter', newUser.name),
+          status: 'Aktif'
+        };
+        setUsers((prev) => [...prev, doctor]);
+        showToast(`Dokter ${newUser.name} berhasil didaftarkan!`, 'success');
+        return true;
+      }
+
+      showToast('Role pengguna tersebut belum didukung.', 'danger');
+      return false;
     } catch (err) {
-      showToast(err.message || 'Gagal menambahkan dokter baru.', 'danger');
+      showToast(err.message || `Gagal menambahkan ${newUser.role}.`, 'danger');
+      return false;
     }
   };
 
@@ -744,7 +785,7 @@ export function AppProvider({ children }) {
       await usersApi.updateProfile({
         fullName: profileForm.name || profileForm.fullName,
         nik: profileForm.nik,
-        birthDate: profileForm.birthDate,
+        birthDate: profileForm.birthDate || null,
         gender: profileForm.gender,
         phone: profileForm.phone,
         address: profileForm.address,

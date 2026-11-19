@@ -140,6 +140,11 @@ export const usersApi = {
       method: 'POST',
       body: doctorData,
     }),
+  createPatient: (patientData) =>
+    apiFetch('/users/patient', {
+      method: 'POST',
+      body: patientData,
+    }),
   updateProfile: (profileData) =>
     apiFetch('/users/profile', {
       method: 'PUT',

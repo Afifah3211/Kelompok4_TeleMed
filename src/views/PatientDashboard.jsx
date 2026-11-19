@@ -219,8 +219,8 @@ export default function PatientDashboard() {
             <HeartPulse size={16} /> Informasi Kesehatan
           </div>
           <div style={{ color: '#334155' }}>
-            <div>Gol. Darah: <strong>{currentUser.bloodType || 'Belum diisi'}</strong></div>
-            <div style={{ marginTop: '2px' }}>Alergi: <strong style={{ color: '#DC2626' }}>{currentUser.allergies || 'Belum diisi'}</strong></div>
+            <div>Gol. Darah: <strong>{currentUser.bloodType || '-'}</strong></div>
+            <div style={{ marginTop: '2px' }}>Alergi: <strong style={{ color: currentUser.allergies && currentUser.allergies !== '-' ? '#DC2626' : '#64748B' }}>{currentUser.allergies || '-'}</strong></div>
           </div>
         </div>
       </aside>
@@ -538,7 +538,6 @@ export default function PatientDashboard() {
                     className="form-input"
                     value={profileForm.birthDate}
                     onChange={(e) => setProfileForm({ ...profileForm, birthDate: e.target.value })}
-                    required
                   />
                 </div>
 
@@ -551,6 +550,7 @@ export default function PatientDashboard() {
                   >
                     <option value="Laki-laki">Laki-laki</option>
                     <option value="Perempuan">Perempuan</option>
+                    <option value="-">- (Tidak dicantumkan)</option>
                   </select>
                 </div>
 

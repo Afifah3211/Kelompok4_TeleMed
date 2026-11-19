@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from app.audit import audit
 from app.db import execute, fetch_one, transaction
 from app.limiter import limiter
+from app.normalization import normalize_gender
 from app.security import (
     create_access_token,
     get_current_user,
@@ -149,6 +150,13 @@ async def register(req: RegisterRequest, request: Request):
             detail="Password minimal 8 karakter",
         )
 
+    gender = normalize_gender(req.gender)
+    if req.gender and req.gender.strip() != "-" and gender is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Jenis kelamin harus Laki-laki atau Perempuan",
+        )
+
     existing_user = await fetch_one("SELECT id FROM users WHERE username = %s", (username,))
     if existing_user:
         raise HTTPException(
@@ -182,7 +190,7 @@ async def register(req: RegisterRequest, request: Request):
                     req.nik.strip() if req.nik else None,
                     req.fullName.strip(),
                     req.birthDate,
-                    req.gender,
+                    gender,
                     req.phone,
                     req.address,
                     req.bloodType,
