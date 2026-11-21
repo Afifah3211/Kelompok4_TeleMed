@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.audit import audit
-from app.db import fetch_all, fetch_one, transaction
+from app.db import execute, fetch_all, fetch_one, transaction
 from app.security import get_current_user, require_roles
 
 router = APIRouter()
@@ -13,12 +13,33 @@ VALID_RX_STATUSES = {
     "Menunggu Penyiapan",
     "Sedang Diramu",
     "Selesai / Sudah Diambil",
+    "Dikembalikan ke Dokter",
 }
 NEXT_RX_STATUS = {
-    "Menunggu Penyiapan": "Sedang Diramu",
-    "Sedang Diramu": "Selesai / Sudah Diambil",
-    "Selesai / Sudah Diambil": None,
+    "Menunggu Penyiapan": {"Sedang Diramu", "Dikembalikan ke Dokter"},
+    "Sedang Diramu": {"Selesai / Sudah Diambil", "Dikembalikan ke Dokter"},
+    "Selesai / Sudah Diambil": set(),
+    "Dikembalikan ke Dokter": set(),
 }
+
+
+async def ensure_prescription_status_schema() -> None:
+    """Allow pharmacists to return an unprocessable prescription for correction."""
+    await execute(
+        "ALTER TABLE prescriptions DROP CONSTRAINT IF EXISTS prescriptions_status_check;"
+    )
+    await execute(
+        """
+        ALTER TABLE prescriptions
+        ADD CONSTRAINT prescriptions_status_check
+        CHECK (status IN (
+            'Menunggu Penyiapan',
+            'Sedang Diramu',
+            'Selesai / Sudah Diambil',
+            'Dikembalikan ke Dokter'
+        ));
+        """
+    )
 
 
 class UpdatePrescriptionStatusRequest(BaseModel):
@@ -120,7 +141,7 @@ async def update_prescription_status(
                     detail="Resep obat tidak ditemukan",
                 )
 
-            if NEXT_RX_STATUS.get(rx["status"]) != new_status:
+            if new_status not in NEXT_RX_STATUS.get(rx["status"], set()):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=f"Transisi status tidak valid: {rx['status']} tidak dapat diubah menjadi {new_status}.",

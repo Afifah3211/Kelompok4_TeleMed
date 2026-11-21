@@ -12,7 +12,6 @@ import {
   Trash2,
   RotateCcw,
   Heart,
-  Sparkles,
   Stethoscope,
   Eye,
   AlertTriangle,
@@ -21,14 +20,6 @@ import {
   Plus
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
-
-const ICD10_PRESETS = [
-  { code: 'I10', label: 'Hipertensi Primer Esensial' },
-  { code: 'J02.9', label: 'Faringitis Akut' },
-  { code: 'K30', label: 'Dispepsia Fungsional' },
-  { code: 'E11.9', label: 'Diabetes Melitus Tipe 2' },
-  { code: 'J06.9', label: 'Infeksi Saluran Pernapasan Akut (ISPA)' }
-];
 
 export default function DoctorEMR() {
   const {
@@ -150,13 +141,8 @@ export default function DoctorEMR() {
     }
   };
 
-  // Preset ICD-10 quick filler
-  const handleSelectPreset = (item) => {
-    setDiagnosis(`${item.label} (ICD-10: ${item.code})`);
-  };
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div className="doctor-emr-root" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Header bar with Navigation Tabs */}
       <div
         style={{
@@ -188,7 +174,7 @@ export default function DoctorEMR() {
           </div>
           <div>
             <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0F172A' }}>
-              Portal Dokter & Rekam Medis (Doctor EMR)
+              Portal Dokter
             </h1>
             <div style={{ fontSize: '0.82rem', color: '#64748B' }}>
               {currentUser.name} • {currentUser.specialty || 'Dokter Spesialis'} • SIP: {currentUser.sip || '446/123/SIP/2022'}
@@ -203,7 +189,7 @@ export default function DoctorEMR() {
             onClick={() => setCurrentView('emr-active')}
           >
             <Clock size={16} />
-            <span>Pemeriksaan Hari Ini (Split-Screen)</span>
+            <span>Antrean</span>
           </button>
 
           <button
@@ -211,7 +197,7 @@ export default function DoctorEMR() {
             onClick={() => setCurrentView('arsip')}
           >
             <Archive size={16} />
-            <span>Semua Rekam Medis & Arsip Soft Delete ({emrs.length})</span>
+            <span>Arsip rekam medis ({emrs.length})</span>
           </button>
 
         </div>
@@ -223,8 +209,16 @@ export default function DoctorEMR() {
           Right column: Active Consultation Form (Keluhan, Diagnosis, Tindakan, Resep Obat)
           Button: Simpan Rekam Medis (Primary Blue)
          ========================================================================= */}
-      {currentView === 'emr-active' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '380px 1fr', gap: '24px', alignItems: 'start' }}>
+      {currentView === 'emr-active' && (doctorAppointments.length === 0 ? (
+        <div className="card doctor-no-appointments">
+          <Calendar size={28} color="#0F766E" />
+          <div>
+            <h2>Tidak ada pasien dalam antrean</h2>
+            <p>Jadwal konsultasi aktif akan muncul di sini. Riwayat sebelumnya tersedia di arsip rekam medis.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="doctor-workspace" style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 380px) minmax(0, 1fr)', gap: '20px', alignItems: 'start' }}>
           {/* Left Column: Jadwal Hari Ini / Today's appointments */}
           <div className="card" style={{ padding: '20px' }}>
             <div className="card-header" style={{ marginBottom: '14px', paddingBottom: '12px' }}>
@@ -238,13 +232,13 @@ export default function DoctorEMR() {
                 </p>
               </div>
               <span className="badge badge-accent" style={{ color: '#0F766E' }}>
-                {doctorAppointments.length} Konsultasi
+                {doctorAppointments.length} pasien
               </span>
             </div>
 
             {doctorAppointments.length === 0 ? (
               <div style={{ padding: '24px 12px', textAlign: 'center', color: '#64748B', fontSize: '0.88rem' }}>
-                Tidak ada konsultasi aktif. Konsultasi selesai dapat dilihat di arsip rekam medis.
+                Tidak ada pasien dalam antrean. Riwayat konsultasi tersedia di arsip.
               </div>
             ) : <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {doctorAppointments.map((apt) => {
@@ -431,36 +425,14 @@ export default function DoctorEMR() {
 
                 {/* 2. Clean Text Input for 'Diagnosis' (PRD Spec) */}
                 <div className="form-group">
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <label className="form-label" style={{ marginBottom: 0 }}>
-                      Diagnosis Klinis (Assessment Medis)
-                    </label>
-                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.72rem', color: '#64748B' }}>Preset ICD-10:</span>
-                      {ICD10_PRESETS.slice(0, 3).map((p) => (
-                        <button
-                          key={p.code}
-                          type="button"
-                          onClick={() => handleSelectPreset(p)}
-                          style={{
-                            background: '#F1F5F9',
-                            border: '1px solid #CBD5E1',
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            fontSize: '0.7rem',
-                            cursor: 'pointer',
-                            color: '#334155'
-                          }}
-                        >
-                          {p.code}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <label className="form-label" htmlFor="clinical-diagnosis">
+                    Diagnosis klinis
+                  </label>
                   <input
+                    id="clinical-diagnosis"
                     type="text"
                     className="form-input"
-                    placeholder="Contoh: Hipertensi Primer Esensial (ICD-10: I10)"
+                    placeholder="Tulis diagnosis; sertakan kode ICD-10 bila diperlukan"
                     value={diagnosis}
                     onChange={(e) => setDiagnosis(e.target.value)}
                     required
@@ -532,15 +504,15 @@ export default function DoctorEMR() {
                 </div>
               </form>
             ) : (
-              <div style={{ textAlign: 'center', padding: '48px 20px', color: '#64748B' }}>
+              <div className="doctor-selection-empty" style={{ textAlign: 'center', padding: '36px 20px', color: '#64748B' }}>
                 <User size={40} style={{ color: '#CBD5E1', margin: '0 auto 12px' }} />
-                <div style={{ fontWeight: 600 }}>Tidak ada pasien antrean yang dipilih</div>
-                <div style={{ fontSize: '0.85rem', marginTop: '4px' }}>Silakan klik salah satu pasien pada daftar jadwal hari ini di sebelah kiri.</div>
+                <div style={{ fontWeight: 600 }}>Pilih pasien dari antrean</div>
+                <div style={{ fontSize: '0.85rem', marginTop: '4px' }}>Detail konsultasi akan tampil di area ini.</div>
               </div>
             )}
           </div>
         </div>
-      )}
+      ))}
 
       {/* =========================================================================
           VIEW 2: ARSIP REKAM MEDIS & SOFT DELETE (PRD Goals & Section 4)
@@ -551,10 +523,10 @@ export default function DoctorEMR() {
             <div>
               <h2 className="card-title">
                 <Archive size={20} color="#1D4ED8" />
-                Arsip Rekam Medis (EMR Database)
+                Arsip rekam medis
               </h2>
               <p style={{ fontSize: '0.82rem', color: '#64748B', marginTop: '2px' }}>
-                Fitur Keamanan Data: Data terhapus menggunakan mekanisme <strong>Soft Delete</strong> sehingga data fisik kesehatan pasien tetap terjaga aman.
+                Lihat catatan pemeriksaan dan pulihkan data yang diarsipkan bila diperlukan.
               </p>
             </div>
           </div>

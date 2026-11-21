@@ -34,10 +34,10 @@ export default function Navbar() {
             </div>
             <div className="brand-subtitle">
               {isLoggedIn 
-                ? (currentUser.role === 'pasien' ? 'Portal Pasien Terdaftar' :
-                   currentUser.role === 'dokter' ? 'Portal Rekam Medis Dokter (EMR)' :
-                   currentUser.role === 'admin' ? 'Portal Administrator' :
-                   'Portal Instalasi Farmasi & Apoteker')
+                ? (currentUser.role === 'pasien' ? 'Portal Pasien' :
+                   currentUser.role === 'dokter' ? 'Portal Dokter' :
+                   currentUser.role === 'admin' ? 'Portal Admin' :
+                   'Portal Farmasi')
                 : 'Konsultasi Kesehatan Online'}
             </div>
           </div>
@@ -74,22 +74,22 @@ export default function Navbar() {
             <div className="auth-role-pill">
               {currentUser.role === 'pasien' && (
                 <span className="role-tag tag-pasien">
-                  <User size={14} /> Role Pasien
+                  <User size={14} /> Pasien
                 </span>
               )}
               {currentUser.role === 'dokter' && (
                 <span className="role-tag tag-dokter">
-                  <Stethoscope size={14} /> Role Dokter (EMR)
+                  <Stethoscope size={14} /> Dokter
                 </span>
               )}
               {currentUser.role === 'admin' && (
                 <span className="role-tag tag-admin">
-                  <ShieldCheck size={14} /> Role Admin
+                  <ShieldCheck size={14} /> Admin
                 </span>
               )}
               {currentUser.role === 'apoteker' && (
                 <span className="role-tag tag-apoteker">
-                  <Pill size={14} /> Role Apoteker Farmasi
+                  <Pill size={14} /> Apoteker
                 </span>
               )}
             </div>

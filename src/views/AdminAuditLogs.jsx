@@ -138,9 +138,10 @@ export default function AdminAuditLogs() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div className="admin-dashboard" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Top Banner */}
       <div
+        className="admin-dashboard-banner"
         style={{
           background: '#0F172A',
           borderRadius: '16px',
@@ -171,20 +172,18 @@ export default function AdminAuditLogs() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#fff' }}>
-                Dashboard Administrator & Log Audit
+                Administrator
               </h1>
-              <span className="badge badge-accent" style={{ fontSize: '0.72rem' }}>
-                UIN Sunan Ampel Surabaya 2026
-              </span>
             </div>
             <div style={{ fontSize: '0.85rem', color: '#94A3B8', marginTop: '4px' }}>
-              Administrator: <strong>{currentUser.name}</strong> • Modul: Kelola Dokter, Pasien, Audit Log, dan DRP Cloud
+              <strong>{currentUser.name}</strong> · Kelola pengguna dan aktivitas sistem
             </div>
           </div>
         </div>
 
         {/* 4 Tabs Navigation */}
         <div
+          className="admin-dashboard-tabs"
           style={{
             display: 'flex',
             background: '#1E293B',
@@ -211,7 +210,7 @@ export default function AdminAuditLogs() {
             }}
           >
             <FileSpreadsheet size={16} />
-            <span>Log Audit ({auditLogs.length})</span>
+            <span>Audit log</span>
           </button>
 
           <button
@@ -231,7 +230,7 @@ export default function AdminAuditLogs() {
             }}
           >
             <Stethoscope size={16} />
-            <span>Kelola Dokter ({doctors.length})</span>
+            <span>Dokter</span>
           </button>
 
           <button
@@ -251,7 +250,7 @@ export default function AdminAuditLogs() {
             }}
           >
             <Users size={16} />
-            <span>Data Pasien ({patients.length})</span>
+            <span>Pasien</span>
           </button>
 
           <button
@@ -271,7 +270,7 @@ export default function AdminAuditLogs() {
             }}
           >
             <Database size={16} />
-            <span>Backup & Sistem (DRP)</span>
+            <span>Sistem & backup</span>
           </button>
 
         </div>
@@ -284,7 +283,7 @@ export default function AdminAuditLogs() {
             <div>
               <h2 className="card-title">
                 <FileSpreadsheet size={20} color="#1D4ED8" />
-                Catatan Aktivitas Sistem (Audit Trail Logs)
+                Aktivitas sistem
               </h2>
               <p style={{ fontSize: '0.82rem', color: '#64748B', marginTop: '2px' }}>
                 Setiap aksi dicatat otomatis: timestamp, IP address, user_id, action, table_name, dan record_id

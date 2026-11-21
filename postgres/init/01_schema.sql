@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS prescriptions (
   patient_id        INTEGER NOT NULL REFERENCES patients(id),
   doctor_id         INTEGER NOT NULL REFERENCES doctors(id),
   status            VARCHAR(40) NOT NULL DEFAULT 'Menunggu Penyiapan'
-                    CHECK (status IN ('Menunggu Penyiapan','Sedang Diramu','Selesai / Sudah Diambil')),
+                    CHECK (status IN ('Menunggu Penyiapan','Sedang Diramu','Selesai / Sudah Diambil','Dikembalikan ke Dokter')),
   notes             TEXT,
   pharmacist_notes  TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()

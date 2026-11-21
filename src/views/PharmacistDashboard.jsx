@@ -30,9 +30,13 @@ export default function PharmacistDashboard() {
   const [searchDrug, setSearchDrug] = useState('');
 
   const isCompleted = (rx) => rx.status.toLowerCase().includes('selesai');
-  const activePrescriptions = prescriptions.filter((rx) => !isCompleted(rx));
-  const completedPrescriptions = prescriptions.filter(isCompleted);
-  const visiblePrescriptions = queueView === 'active' ? activePrescriptions : completedPrescriptions;
+  const isReturned = (rx) => rx.status === 'Dikembalikan ke Dokter';
+  const activePrescriptions = prescriptions.filter((rx) => !isCompleted(rx) && !isReturned(rx));
+  const historyPrescriptions = prescriptions.filter((rx) => isCompleted(rx) || isReturned(rx));
+  const visiblePrescriptions = queueView === 'active' ? activePrescriptions : historyPrescriptions;
+  const unavailableItems = selectedRx?.items?.filter((item) =>
+    !item.medicineId || !medicines.some((medicine) => Number(medicine.id) === Number(item.medicineId))
+  ) || [];
 
   useEffect(() => {
     const refresh = () => {
@@ -68,7 +72,7 @@ export default function PharmacistDashboard() {
             <Pill size={26} color="#059669" />
           </div>
           <div>
-            <h2 className="banner-title">Instalasi Farmasi & Pengelolaan Obat</h2>
+            <h2 className="banner-title">Layanan Farmasi</h2>
             <p className="banner-sub">
               Petugas: <strong>{currentUser.name}</strong> • SIPA: {currentUser.sipa || '19950512/SIPA-3273/2022'} • RS/Klinik TeleMed
             </p>
@@ -88,7 +92,7 @@ export default function PharmacistDashboard() {
           </div>
           <div className="p-stat-card">
             <span className="p-stat-num text-emerald">
-              {completedPrescriptions.length}
+              {historyPrescriptions.filter(isCompleted).length}
             </span>
             <span className="p-stat-lbl">Resep Selesai</span>
           </div>
@@ -102,7 +106,7 @@ export default function PharmacistDashboard() {
           onClick={() => setActiveTab('resep')}
         >
           <FileText size={16} />
-          <span>Antrean Resep Digital ({activePrescriptions.length})</span>
+          <span>Resep</span>
         </button>
 
         <button
@@ -110,7 +114,7 @@ export default function PharmacistDashboard() {
           onClick={() => setActiveTab('obat')}
         >
           <Package size={16} />
-          <span>Inventori & Stok Obat ({medicines.length})</span>
+          <span>Stok obat</span>
         </button>
       </div>
 
@@ -122,10 +126,10 @@ export default function PharmacistDashboard() {
             <div className="filter-bar pharmacist-queue-toolbar">
               <div className="queue-view-switch" aria-label="Tampilan antrean resep">
                 <button type="button" className={`filter-chip ${queueView === 'active' ? 'active' : ''}`} onClick={() => setQueueView('active')}>
-                  Antrean aktif ({activePrescriptions.length})
+                  Antrean aktif
                 </button>
                 <button type="button" className={`filter-chip ${queueView === 'completed' ? 'active' : ''}`} onClick={() => setQueueView('completed')}>
-                  Riwayat diserahkan ({completedPrescriptions.length})
+                  Riwayat resep
                 </button>
               </div>
               <button type="button" className="btn btn-outline btn-sm" onClick={() => refreshPrescriptions().catch((error) => showToast(error.message || 'Gagal memperbarui antrean resep.', 'danger'))}>
@@ -137,7 +141,7 @@ export default function PharmacistDashboard() {
               {visiblePrescriptions.length === 0 ? (
                 <div className="empty-state-box">
                   <Clock size={32} color="#94A3B8" />
-                  <p>{queueView === 'active' ? 'Tidak ada resep yang perlu diproses.' : 'Belum ada resep yang diserahkan.'}</p>
+                  <p>{queueView === 'active' ? 'Tidak ada resep yang perlu diproses.' : 'Belum ada riwayat resep.'}</p>
                 </div>
               ) : (
                 visiblePrescriptions.map((rx) => (
@@ -150,7 +154,7 @@ export default function PharmacistDashboard() {
                       <span className="rx-id-badge">{rx.id}</span>
                       <span className={`status-pill ${
                         rx.status.includes('Selesai') ? 'pill-success' :
-                        rx.status.includes('Diramu') ? 'pill-warning' : 'pill-info'
+                        rx.status.includes('Diramu') || isReturned(rx) ? 'pill-warning' : 'pill-info'
                       }`}>
                         {rx.status}
                       </span>
@@ -191,7 +195,7 @@ export default function PharmacistDashboard() {
                   </div>
                   <span className={`status-pill ${
                     selectedRx.status.includes('Selesai') ? 'pill-success' :
-                    selectedRx.status.includes('Diramu') ? 'pill-warning' : 'pill-info'
+                    selectedRx.status.includes('Diramu') || isReturned(selectedRx) ? 'pill-warning' : 'pill-info'
                   }`}>
                     {selectedRx.status}
                   </span>
@@ -246,7 +250,20 @@ export default function PharmacistDashboard() {
                   )}
                 </div>
 
-                {!isCompleted(selectedRx) ? (
+                {!isCompleted(selectedRx) && !isReturned(selectedRx) && unavailableItems.length > 0 ? (
+                  <div className="rx-correction-warning" role="alert">
+                    <div>
+                      <strong>Resep perlu diperbaiki</strong>
+                      <p>Obat {unavailableItems.map((item) => `“${item.medicineName}”`).join(', ')} tidak cocok dengan katalog stok. Resep ini belum bisa diserahkan.</p>
+                    </div>
+                    <button
+                      className="btn btn-outline"
+                      onClick={() => updatePrescriptionStatus(selectedRx.id, 'Dikembalikan ke Dokter', 'Obat tidak ditemukan pada katalog stok. Mohon dokter memperbaiki resep.')}
+                    >
+                      Kembalikan ke dokter
+                    </button>
+                  </div>
+                ) : !isCompleted(selectedRx) && !isReturned(selectedRx) ? (
                   <div className="pharmacist-workflow-actions">
                     <h4 style={{ fontSize: '0.9rem', marginBottom: '10px' }}>Ubah Status Pengerjaan Obat:</h4>
                     <div className="workflow-buttons">
@@ -268,6 +285,10 @@ export default function PharmacistDashboard() {
                         <span>Tandai Sudah Diserahkan</span>
                       </button>
                     </div>
+                  </div>
+                ) : isReturned(selectedRx) ? (
+                  <div className="prescription-completed-note">
+                    Resep dikembalikan ke dokter untuk diperbaiki. Resep tersimpan di riwayat dan tidak mengurangi stok.
                   </div>
                 ) : (
                   <div className="prescription-completed-note">

@@ -1688,6 +1688,102 @@ h1, h2, h3, h4, h5, h6 {
   gap: 20px;
 }
 
+/* Consistent, compact dashboards across the clinical roles. */
+.doctor-workspace {
+  grid-template-columns: minmax(290px, 360px) minmax(0, 1fr) !important;
+  gap: 18px !important;
+}
+
+.doctor-selection-empty {
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.doctor-no-appointments {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 24px;
+}
+
+.doctor-no-appointments h2 {
+  margin: 0;
+  font-size: 1rem;
+  color: #0F172A;
+}
+
+.doctor-no-appointments p {
+  margin: 4px 0 0;
+  color: #64748B;
+  font-size: 0.88rem;
+}
+
+.pharma-tab-nav {
+  max-width: 100%;
+}
+
+.pharma-nav-btn {
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .doctor-workspace,
+  .patient-dashboard-layout,
+  .pharma-content-split {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .pharma-banner {
+    align-items: flex-start;
+  }
+
+  .pharma-stats-row {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .admin-dashboard-banner {
+    align-items: flex-start !important;
+  }
+
+  .admin-dashboard-tabs {
+    width: 100%;
+  }
+}
+
+@media (max-width: 600px) {
+  .doctor-emr-root,
+  .pharmacist-dashboard-container {
+    gap: 14px !important;
+  }
+
+  .pharma-tab-nav {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pharma-nav-btn {
+    justify-content: center;
+    padding: 9px 10px;
+  }
+
+  .doctor-no-appointments {
+    align-items: flex-start;
+    padding: 18px;
+  }
+
+  .rx-correction-warning {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-dashboard-tabs > button {
+    flex: 1 1 140px;
+    justify-content: center;
+  }
+}
+
 .pharma-banner {
   background: linear-gradient(135deg, #064E3B 0%, #065F46 100%);
   color: #FFFFFF;
@@ -1780,6 +1876,25 @@ h1, h2, h3, h4, h5, h6 {
 .pharma-nav-btn.active {
   background: #059669;
   color: #FFFFFF;
+}
+
+.rx-correction-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #FCD34D;
+  border-radius: 12px;
+  background: #FFFBEB;
+  color: #92400E;
+}
+
+.rx-correction-warning p {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 
 .pharma-content-split {

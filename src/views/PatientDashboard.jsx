@@ -81,7 +81,7 @@ export default function PatientDashboard() {
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '24px', alignItems: 'start' }}>
+    <div className="patient-dashboard-layout" style={{ display: 'grid', gridTemplateColumns: '260px minmax(0, 1fr)', gap: '24px', alignItems: 'start' }}>
       {/* Left Sidebar Navigation (PRD Spec: 'Profil', 'Jadwal Konsultasi', 'Riwayat Medis') */}
       <aside 
         style={{ 
@@ -156,7 +156,7 @@ export default function PatientDashboard() {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <FileText size={18} />
-            <span>Riwayat Medis (EMR)</span>
+            <span>Riwayat medis</span>
           </div>
         </button>
 
@@ -668,10 +668,10 @@ export default function PatientDashboard() {
                             fontWeight: 700,
                             padding: '4px 10px',
                             borderRadius: '20px',
-                            background: rx.status.includes('Selesai') ? '#DCFCE7' : rx.status.includes('Diramu') ? '#FEF3C7' : '#EFF6FF',
-                            color: rx.status.includes('Selesai') ? '#15803D' : rx.status.includes('Diramu') ? '#B45309' : '#1D4ED8',
+                            background: rx.status.includes('Selesai') ? '#DCFCE7' : rx.status.includes('Diramu') || rx.status.includes('Dikembalikan') ? '#FEF3C7' : '#EFF6FF',
+                            color: rx.status.includes('Selesai') ? '#15803D' : rx.status.includes('Diramu') || rx.status.includes('Dikembalikan') ? '#B45309' : '#1D4ED8',
                             border: '1px solid',
-                            borderColor: rx.status.includes('Selesai') ? '#86EFAC' : rx.status.includes('Diramu') ? '#FDE68A' : '#BFDBFE'
+                            borderColor: rx.status.includes('Selesai') ? '#86EFAC' : rx.status.includes('Diramu') || rx.status.includes('Dikembalikan') ? '#FDE68A' : '#BFDBFE'
                           }}
                         >
                           {rx.status}
@@ -679,7 +679,12 @@ export default function PatientDashboard() {
                       </div>
                     </div>
 
-                    {/* Progress tracking indicator */}
+                    {rx.status === 'Dikembalikan ke Dokter' ? (
+                      <div style={{ background: '#FFFBEB', color: '#92400E', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.85rem' }}>
+                        Resep perlu diperbaiki oleh dokter sebelum dapat diproses apoteker.
+                      </div>
+                    ) : (
+                    /* Progress tracking indicator */
                     <div style={{ background: '#F8FAFC', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-around', fontSize: '0.78rem', color: '#475569' }}>
                       <span style={{ fontWeight: 600, color: '#059669', display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <CheckCircle2 size={14} /> 1. Diterima Farmasi
@@ -693,6 +698,7 @@ export default function PatientDashboard() {
                         {rx.status.includes('Selesai') ? <CheckCircle2 size={14} /> : <Clock size={14} />} 3. Siap Diambil / Dikirim
                       </span>
                     </div>
+                    )}
 
                     {/* Rincian Obat */}
                     <div style={{ marginBottom: '12px' }}>

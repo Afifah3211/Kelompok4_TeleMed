@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
     logger.info("Memulai aplikasi TeleMed FastAPI...")
     await init_db_pool()
     await chat.ensure_chat_schema()
+    await prescriptions.ensure_prescription_status_schema()
     try:
         files.init_minio_bucket()
         logger.info(f"MinIO bucket '{settings.MINIO_BUCKET}' berhasil diinisialisasi.")
