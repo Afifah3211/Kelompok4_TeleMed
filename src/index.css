@@ -78,6 +78,7 @@ h1, h2, h3, h4, h5, h6 {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  animation: fadeIn 220ms ease-out both;
 }
 
 .main-content {
@@ -1108,6 +1109,10 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .app-container {
+    animation: none;
+  }
+
   .health-illustration-icon,
   .health-circuit-signal {
     animation: none;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import DashboardMetric from '../components/DashboardMetric';
 import {
@@ -52,8 +52,18 @@ export default function AdminAuditLogs() {
   } = useApp();
 
   // Tabs: 'dashboard' | 'log-sistem' | 'kelola-dokter' | 'data-pasien' | 'backup-drp' | 'rekam-medis'
-  const [activeAdminTab, setActiveAdminTab] = useState('dashboard');
+  const adminTabKey = `telemed_admin_tab_${currentUser?.id || 'unknown'}`;
+  const [activeAdminTab, setActiveAdminTab] = useState(() => {
+    const savedTab = sessionStorage.getItem(adminTabKey);
+    return ['dashboard', 'log-sistem', 'kelola-dokter', 'data-pasien', 'backup-drp', 'rekam-medis'].includes(savedTab)
+      ? savedTab
+      : 'dashboard';
+  });
   const [dashboardRange, setDashboardRange] = useState(7);
+
+  useEffect(() => {
+    sessionStorage.setItem(adminTabKey, activeAdminTab);
+  }, [activeAdminTab, adminTabKey]);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');

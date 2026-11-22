@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { isChatConsultation } from '../utils/consultation';
 import ProfilePhotoUpload from '../components/ProfilePhotoUpload';
@@ -37,9 +37,17 @@ export default function PatientDashboard() {
     showToast
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState('jadwal'); // 'jadwal', 'riwayat', 'resep', 'profil'
+  const patientTabKey = `telemed_patient_tab_${currentUser.id}`;
+  const [activeTab, setActiveTab] = useState(() => {
+    const savedTab = sessionStorage.getItem(patientTabKey);
+    return ['jadwal', 'riwayat', 'resep', 'profil'].includes(savedTab) ? savedTab : 'jadwal';
+  }); // 'jadwal', 'riwayat', 'resep', 'profil'
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [savingProfile, setSavingProfile] = useState(false);
+
+  useEffect(() => {
+    sessionStorage.setItem(patientTabKey, activeTab);
+  }, [activeTab, patientTabKey]);
 
   // Patient profile form state
   const [profileForm, setProfileForm] = useState({

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect } from 'react';
 import { useApp } from './context/AppContext';
 import Navbar from './components/Navbar';
 import LandingPage from './views/LandingPage';
@@ -14,7 +14,29 @@ import EMREditModal from './components/EMREditModal';
 import Toast from './components/Toast';
 
 export default function App() {
-  const { currentPage, currentUser } = useApp();
+  const { currentPage, currentUser, isLoaded } = useApp();
+
+  useLayoutEffect(() => {
+    if (!isLoaded) return;
+    const savedScrollY = Number.parseInt(sessionStorage.getItem('telemed_scroll_y') || '', 10);
+    if (Number.isFinite(savedScrollY) && savedScrollY > 0) {
+      window.scrollTo(0, savedScrollY);
+    }
+    sessionStorage.removeItem('telemed_scroll_y');
+  }, [isLoaded]);
+
+  if (!isLoaded) {
+    return (
+      <main className="app-loading-screen" aria-live="polite" aria-busy="true">
+        <div className="app-loading-brand">
+          <span className="app-loading-icon" aria-hidden="true">+</span>
+          <strong>MediSync</strong>
+        </div>
+        <p>Memulihkan halaman Anda…</p>
+        <span className="app-loading-indicator" aria-hidden="true" />
+      </main>
+    );
+  }
 
   return (
     <div className="app-container">

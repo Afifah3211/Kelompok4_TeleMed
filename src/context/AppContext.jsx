@@ -18,6 +18,8 @@ import {
 const AppContext = createContext();
 
 const DEFAULT_AVATAR = '/avatar-placeholder.svg';
+const CURRENT_PAGE_KEY = 'telemed_current_page';
+const VALID_PAGES = new Set(['landing', 'auth', 'reset-password', 'dashboard']);
 
 // Normalisasi objek user & profile dari backend
 function buildCurrentUser(user, profile) {
@@ -174,7 +176,10 @@ function normalizeAuditLog(l) {
 
 export function AppProvider({ children }) {
   // Navigation & Page state
-  const [currentPage, setCurrentPage] = useState('landing'); // 'landing' | 'auth' | 'reset-password' | 'dashboard'
+  const [currentPage, setCurrentPage] = useState(() => {
+    const savedPage = sessionStorage.getItem(CURRENT_PAGE_KEY);
+    return VALID_PAGES.has(savedPage) ? savedPage : 'landing';
+  }); // 'landing' | 'auth' | 'reset-password' | 'dashboard'
   const [authMode, setAuthMode] = useState('register'); // 'register' | 'login'
   const [dashboardTab, setDashboardTab] = useState('overview');
 
@@ -208,6 +213,19 @@ export function AppProvider({ children }) {
 
   // Toast notifications
   const [toasts, setToasts] = useState([]);
+
+  useEffect(() => {
+    sessionStorage.setItem(CURRENT_PAGE_KEY, currentPage);
+  }, [currentPage]);
+
+  // Keep the same viewport when a user refreshes any page or dashboard tab.
+  useEffect(() => {
+    const saveScrollPosition = () => {
+      sessionStorage.setItem('telemed_scroll_y', String(window.scrollY));
+    };
+    window.addEventListener('pagehide', saveScrollPosition);
+    return () => window.removeEventListener('pagehide', saveScrollPosition);
+  }, []);
 
   // Toast dispatch
   const showToast = useCallback((message, type = 'info') => {
@@ -435,7 +453,8 @@ export function AppProvider({ children }) {
       if (!token) {
         if (isMounted) {
           setCurrentUser(null);
-          setCurrentPage('landing');
+          const savedPage = sessionStorage.getItem(CURRENT_PAGE_KEY);
+          setCurrentPage(savedPage === 'auth' || savedPage === 'reset-password' ? savedPage : 'landing');
           setIsLoaded(true);
         }
         return;
@@ -447,6 +466,7 @@ export function AppProvider({ children }) {
           const userObj = buildCurrentUser(me.user, me.profile);
           setCurrentUser(userObj);
           setCurrentPage('dashboard');
+          // Keep the recovery screen mounted until the dashboard data is ready.
           await loadInitialData(me.user.role);
         }
       } catch (err) {

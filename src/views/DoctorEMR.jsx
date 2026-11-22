@@ -43,7 +43,11 @@ export default function DoctorEMR() {
   } = useApp();
 
   // Tab: examination queue or medical records.
-  const [currentView, setCurrentView] = useState('overview');
+  const doctorViewKey = `telemed_doctor_view_${currentUser?.id || 'unknown'}`;
+  const [currentView, setCurrentView] = useState(() => {
+    const savedView = sessionStorage.getItem(doctorViewKey);
+    return ['overview', 'emr-active', 'arsip', 'chat-history', 'profile'].includes(savedView) ? savedView : 'overview';
+  });
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [doctorProfile, setDoctorProfile] = useState({
@@ -63,6 +67,10 @@ export default function DoctorEMR() {
       workplace: currentUser?.workplace || '',
     });
   }, [currentUser?.id]);
+
+  useEffect(() => {
+    sessionStorage.setItem(doctorViewKey, currentView);
+  }, [currentView, doctorViewKey]);
 
   const handleDoctorProfileSubmit = async (event) => {
     event.preventDefault();

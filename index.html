@@ -6,12 +6,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="MediSync: Sistem Manajemen Telemedis Modern, Aman, dan Terintegrasi (EMR, Janji Temu Dokter, Audit Logging & Backup 3-2-1)" />
     <title>MediSync - Sistem Manajemen Telemedis</title>
+    <style>
+      html, body, #root { min-height: 100%; margin: 0; }
+      .app-loading-screen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; box-sizing: border-box; background: #f8fafc; color: #64748b; font: 14px Arial, sans-serif; }
+      .app-loading-brand { display: flex; align-items: center; gap: 9px; color: #1d4ed8; font-size: 19px; }
+      .app-loading-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: #1d4ed8; color: #fff; font-size: 25px; font-weight: 400; box-shadow: 0 4px 10px #1d4ed833; }
+      .app-loading-screen p { margin: 0; }
+      .app-loading-indicator { width: 92px; height: 3px; overflow: hidden; border-radius: 4px; background: #dbeafe; }
+      .app-loading-indicator::after { display: block; width: 40%; height: 100%; border-radius: inherit; background: #1d4ed8; content: ''; animation: app-loading-slide 1.1s ease-in-out infinite; }
+      @keyframes app-loading-slide { from { transform: translateX(-110%); } to { transform: translateX(260%); } }
+      @media (prefers-reduced-motion: reduce) { .app-loading-indicator::after { animation: none; width: 100%; } }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main class="app-loading-screen" aria-live="polite" aria-busy="true">
+        <div class="app-loading-brand"><span class="app-loading-icon" aria-hidden="true">+</span><strong>MediSync</strong></div>
+        <p>Memulihkan halaman Anda…</p>
+        <span class="app-loading-indicator" aria-hidden="true"></span>
+      </main>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
