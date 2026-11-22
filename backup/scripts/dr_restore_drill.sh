@@ -16,7 +16,7 @@ fi
 
 timestamp="$(date '+%Y%m%d_%H%M%S')"
 restore_db="telemed_dr_restore_${timestamp}"
-dump_dir="/backups/dr-test"
+dump_dir="/backups/dump"
 dump_file="${dump_dir}/${PGDATABASE}_${timestamp}.dump"
 keep_db="${DR_TEST_KEEP_DB:-0}"
 db_created=0

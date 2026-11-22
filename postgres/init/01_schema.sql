@@ -1,8 +1,7 @@
 -- ============================================================
 -- TeleMed (Kelompok 4) - Skema PostgreSQL 16
 -- Sesuai Dokumen Arsitektur & DRP Awal (6 tabel inti)
--- + tabel tambahan yang MEMANG dipakai aplikasi: pharmacists,
---   medicines, prescriptions, prescription_items,
+-- + tabel tambahan yang MEMANG dipakai aplikasi: prescriptions, prescription_items,
 --   backup_config, backup_nodes, backup_runs
 -- Aman dijalankan berulang (IF NOT EXISTS).
 -- ============================================================
@@ -13,7 +12,7 @@ CREATE TABLE IF NOT EXISTS users (
   username      VARCHAR(100) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,              -- hash bcrypt, BUKAN password asli
   role          VARCHAR(20)  NOT NULL
-                CHECK (role IN ('admin','dokter','pasien','apoteker')),
+                CHECK (role IN ('admin','dokter','pasien')),
   is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
   is_deleted    BOOLEAN      NOT NULL DEFAULT FALSE,
   deleted_at    TIMESTAMPTZ,
@@ -47,15 +46,6 @@ CREATE TABLE IF NOT EXISTS doctors (
   phone          VARCHAR(30),
   workplace      VARCHAR(150),
   profile_photo_key VARCHAR(512)
-);
-
--- 3b. pharmacists (role apoteker ada di aplikasi) -------------
-CREATE TABLE IF NOT EXISTS pharmacists (
-  id          SERIAL PRIMARY KEY,
-  user_id     INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-  full_name   VARCHAR(150) NOT NULL,
-  sipa_number VARCHAR(80),
-  workplace   VARCHAR(150)
 );
 
 -- 4. consultations -------------------------------------------
@@ -123,30 +113,16 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_user    ON audit_logs(user_id);
 
--- 7. medicines, prescriptions (modul apoteker) -----------------
-CREATE TABLE IF NOT EXISTS medicines (
-  id          SERIAL PRIMARY KEY,
-  code        VARCHAR(20) UNIQUE,
-  name        VARCHAR(150) NOT NULL,
-  category    VARCHAR(100),
-  form        VARCHAR(50),
-  stock       INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
-  unit        VARCHAR(50),
-  price       NUMERIC(12,2) NOT NULL DEFAULT 0,
-  dosage      TEXT,
-  description TEXT
-);
-
+-- 7. Prescriptions belong to the doctor-patient clinical workflow.
 CREATE TABLE IF NOT EXISTS prescriptions (
   id                SERIAL PRIMARY KEY,
   medical_record_id INTEGER REFERENCES medical_records(id),
   consultation_id   INTEGER REFERENCES consultations(id),
   patient_id        INTEGER NOT NULL REFERENCES patients(id),
   doctor_id         INTEGER NOT NULL REFERENCES doctors(id),
-  status            VARCHAR(40) NOT NULL DEFAULT 'Diterbitkan'
-                    CHECK (status IN ('Diterbitkan','Menunggu Penyiapan','Sedang Diramu','Selesai / Sudah Diambil','Dikembalikan ke Dokter')),
+  status            VARCHAR(20) NOT NULL DEFAULT 'Diterbitkan'
+                    CHECK (status = 'Diterbitkan'),
   notes             TEXT,
-  pharmacist_notes  TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_rx_status  ON prescriptions(status);
@@ -155,7 +131,6 @@ CREATE INDEX IF NOT EXISTS idx_rx_patient ON prescriptions(patient_id);
 CREATE TABLE IF NOT EXISTS prescription_items (
   id              SERIAL PRIMARY KEY,
   prescription_id INTEGER NOT NULL REFERENCES prescriptions(id) ON DELETE CASCADE,
-  medicine_id     INTEGER REFERENCES medicines(id),
   medicine_name   VARCHAR(150) NOT NULL,
   quantity        VARCHAR(50),
   dosage          TEXT

@@ -1,7 +1,7 @@
 # TeleMed: Sistem Manajemen Telemedis & Rekam Medis Elektronik 🏥💻
 > **Platform Telemedis Berstandar Enterprise • Versi 2.0 (Kelompok 4 TeleMed)**
 
-TeleMed (MediSync) adalah platform telemedis berbasis web modern yang menghubungkan pasien, dokter spesialis, apoteker, dan administrator klinik secara terintegrasi. Sistem dilengkapi dengan **Rekam Medis Elektronik (EMR)** berfitur *Soft Delete*, pencatatan forensik audit trail (*Audit Log*), **Pencadangan Data Otomatis Berstandar Aturan 3-2-1** (Dump Logis, Base Backup, Continuous WAL Archiving, dan Enkripsi Off-site AES-256), serta kapabilitas **Horizontal Autoscaling & Dynamic Load Balancing**.
+TeleMed (MediSync) adalah platform telemedis berbasis web yang menghubungkan pasien, dokter spesialis, dan administrator klinik. Dokter mencatat rekam medis serta resep untuk pasien; pasien dapat membaca resep dari riwayat medisnya. Aplikasi tidak memiliki akun apoteker atau pengelolaan stok farmasi.
 
 Dokumen praktikum: [Spesifikasi Arsitektur](ARCHITECTURE_SPEC.md), [DRP](recovery/DRP_RECOVERY_PLAN.md), dan [Checklist Deliverable per Pertemuan](PRAKTIKUM.md). PRD produk tersedia di [Dokumen PRD Telemedis.pdf](Dokumen%20PRD%20Telemedis.pdf).
 
@@ -166,7 +166,6 @@ Saat database pertama kali diinisialisasi, seed data otomatis dijalankan secara 
 | **Dokter 1** | `dr.andi@medisync.id` | Dokter Spesialis Penyakit Dalam: input EMR, resep obat, soft-delete EMR, kelola konsultasi. |
 | **Dokter 2** | `dr.sarah@medisync.id` | Dokter Spesialis Anak (Pediatri): penanganan pasien anak dan rekam medis. |
 | **Dokter 3** | `dr.bintang@medisync.id` | Dokter Spesialis Jantung & Pembuluh Darah (Kardiologi). |
-| **Apoteker** | `apoteker@medisync.id` | Staf Farmasi: melihat antrean resep obat, update status racik/penyerahan obat, penyesuaian stok. |
 | **Admin IT** | `admin@medisync.id` | Administrator: pemantauan Audit Log forensik, ekspor CSV audit, manajemen status cadangan DRP. |
 
 ---

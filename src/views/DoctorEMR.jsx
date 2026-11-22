@@ -224,14 +224,12 @@ export default function DoctorEMR() {
     }
 
     const completedItems = prescriptionItems.map((item) => ({
-      ...item,
-      medicineId: item.medicineId ? Number(item.medicineId) : null,
-      medicineName: item.medicineId ? null : item.medicineName.trim(),
+      medicineName: item.medicineName.trim(),
       quantity: Number(item.quantity),
       dosage: item.dosage.trim(),
     }));
     if (completedItems.some((item) =>
-      (!item.medicineId && !item.medicineName) ||
+      !item.medicineName ||
       !Number.isInteger(item.quantity) ||
       item.quantity < 1 ||
       !item.dosage
@@ -768,12 +766,12 @@ export default function DoctorEMR() {
                 <div className="form-group">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 8 }}>
                     <label className="form-label" style={{ margin: 0 }}>Resep obat (opsional)</label>
-                    <button type="button" className="btn btn-outline btn-sm" onClick={() => setPrescriptionItems((items) => [...items, { medicineId: '', medicineName: '', quantity: 1, dosage: '' }])}>
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => setPrescriptionItems((items) => [...items, { medicineName: '', quantity: 1, dosage: '' }])}>
                       <Plus size={15} /> Tambah Obat
                     </button>
                   </div>
                   <p style={{ color: '#64748B', fontSize: 12, margin: '0 0 10px' }}>
-                    Tulis nama obat secara manual; resep tetap tersimpan meskipun obat belum ada di daftar.
+                    Tulis nama obat dan petunjuk pemakaiannya. Resep tersimpan langsung pada rekam medis pasien.
                   </p>
                   {prescriptionItems.length > 0 && (
                     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1.4fr) 100px minmax(180px, 1.5fr) auto', gap: 8, marginBottom: 5, color: '#64748B', fontSize: 11 }}>
@@ -782,8 +780,8 @@ export default function DoctorEMR() {
                   )}
                   {prescriptionItems.map((item, index) => (
                     <div key={index} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1.4fr) 100px minmax(180px, 1.5fr) auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                      <input className="form-input" type="text" maxLength={150} required placeholder="Nama obat" aria-label="Nama obat" value={item.medicineName} onChange={(event) => setPrescriptionItems((items) => items.map((row, rowIndex) => rowIndex === index ? { ...row, medicineId: '', medicineName: event.target.value } : row))} />
-                      <input className="form-input" type="number" min="1" step="1" required aria-label="Jumlah unit stok" value={item.quantity} onChange={(event) => setPrescriptionItems((items) => items.map((row, rowIndex) => rowIndex === index ? { ...row, quantity: event.target.value } : row))} />
+                      <input className="form-input" type="text" maxLength={150} required placeholder="Nama obat" aria-label="Nama obat" value={item.medicineName} onChange={(event) => setPrescriptionItems((items) => items.map((row, rowIndex) => rowIndex === index ? { ...row, medicineName: event.target.value } : row))} />
+                      <input className="form-input" type="number" min="1" step="1" required aria-label="Jumlah" value={item.quantity} onChange={(event) => setPrescriptionItems((items) => items.map((row, rowIndex) => rowIndex === index ? { ...row, quantity: event.target.value } : row))} />
                       <input className="form-input" type="text" maxLength={500} required placeholder="Aturan pakai / dosis" value={item.dosage} onChange={(event) => setPrescriptionItems((items) => items.map((row, rowIndex) => rowIndex === index ? { ...row, dosage: event.target.value } : row))} />
                       <button type="button" className="btn btn-outline btn-sm" aria-label="Hapus item resep" onClick={() => setPrescriptionItems((items) => items.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={15} /></button>
                     </div>

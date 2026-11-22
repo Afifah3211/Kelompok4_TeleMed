@@ -1085,11 +1085,11 @@ export default function AdminAuditLogs() {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
                     <span style={{ color: '#64748B' }}>Target RTO drill</span>
-                    <strong style={{ color: '#0F172A' }}>≤ 5 menit; ukur aktual</strong>
+                    <strong style={{ color: '#0F172A' }}>Maksimal 5 menit; ukur aktual</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
                     <span style={{ color: '#64748B' }}>Target RPO dump</span>
-                    <strong style={{ color: '#0F172A' }}>≤ 6 jam</strong>
+                    <strong style={{ color: '#0F172A' }}>Maksimal 6 jam</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
                     <span style={{ color: '#64748B' }}>PITR dari WAL</span>

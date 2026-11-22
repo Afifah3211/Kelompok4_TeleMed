@@ -91,7 +91,7 @@ async def seed_data():
                     doctors_data,
                 )
 
-                logger.info("[Seed] OK [1/7] users, patients, doctors")
+                logger.info("[Seed] OK [1/6] users, patients, doctors")
 
                 # ── 2. CONSULTATIONS (6) ──────────────────────────────────
                 consultations_data = [
@@ -136,7 +136,7 @@ async def seed_data():
                     """,
                     consultations_data,
                 )
-                logger.info("[Seed] OK [2/7] consultations")
+                logger.info("[Seed] OK [2/6] consultations")
 
                 # ── 3. MEDICAL_RECORDS (3, termasuk 1 soft-deleted) ──────
                 mr_data = [
@@ -180,75 +180,18 @@ async def seed_data():
                     """,
                     mr_data,
                 )
-                logger.info("[Seed] OK [3/7] medical_records")
-
-                # ── 4. MEDICINES (7) ──────────────────────────────────────
-                meds_data = [
-                    (
-                        1, "MED-001", "Paracetamol 500 mg", "Analgesik & Antipiretik",
-                        "Tablet", 240, "Strip (10 tab)", 5000.0,
-                        "3x1 tablet sesudah makan bila demam/nyeri",
-                        "Pereda nyeri ringan-sedang dan penurun demam."
-                    ),
-                    (
-                        2, "MED-002", "Amlodipine 5 mg", "Antihipertensi",
-                        "Tablet", 180, "Strip (10 tab)", 15000.0,
-                        "1x1 tablet pagi hari sesudah makan",
-                        "Penurun tekanan darah tinggi (hipertensi)."
-                    ),
-                    (
-                        3, "MED-003", "Omeprazole 20 mg", "Saluran Cerna (PPI)",
-                        "Kapsul", 150, "Strip (10 kapsul)", 18000.0,
-                        "2x1 kapsul, 30 menit sebelum makan",
-                        "Mengatasi tukak lambung, GERD, dan dispepsia."
-                    ),
-                    (
-                        4, "MED-004", "Antasida Doen", "Saluran Cerna",
-                        "Tablet Kunyah", 300, "Strip (10 tab)", 6000.0,
-                        "3x1 tablet kunyah, 1 jam sebelum makan",
-                        "Menetralkan asam lambung berlebih."
-                    ),
-                    (
-                        5, "MED-005", "Amoxicillin 500 mg", "Antibiotik",
-                        "Kaplet", 110, "Strip (10 tab)", 12000.0,
-                        "3x1 tablet tiap 8 jam harus dihabiskan",
-                        "Antibiotik infeksi bakteri saluran pernapasan."
-                    ),
-                    (
-                        6, "MED-006", "Cetirizine 10 mg", "Antihistamin / Alergi",
-                        "Tablet", 95, "Strip (10 tab)", 10000.0,
-                        "1x1 tablet malam hari",
-                        "Meredakan gejala bersin, gatal, dan rhinitis alergi."
-                    ),
-                    (
-                        7, "MED-007", "Vitamin C 500 mg + Zinc", "Suplemen & Imun",
-                        "Tablet", 400, "Botol (30 tab)", 35000.0,
-                        "1x1 tablet sehari sesudah makan",
-                        "Meningkatkan daya tahan tubuh masa penyembuhan."
-                    ),
-                ]
-                await cur.executemany(
-                    """
-                    INSERT INTO medicines (
-                        id, code, name, category, form, stock, unit, price, dosage, description
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (id) DO NOTHING;
-                    """,
-                    meds_data,
-                )
-                logger.info("[Seed] OK [4/7] medicines")
-
-                # ── 5. PRESCRIPTIONS & PRESCRIPTION_ITEMS ─────────────────
+                logger.info("[Seed] OK [3/6] medical_records")
+                # Resep adalah data klinis dokter-pasien, bukan antrean farmasi.
                 rx_data = [
                     (
                         1, 1, 1, 1, 1,
-                        "Selesai / Sudah Diambil",
+                        "Diterbitkan",
                         "Pasien diinformasikan kontrol tensi 2 minggu lagi.",
                         "2026-10-12 09:50:00+07"
                     ),
                     (
                         2, 2, 2, 2, 1,
-                        "Sedang Diramu",
+                        "Diterbitkan",
                         "Hindari makanan pedas dan kopi.",
                         "2026-10-19 10:40:00+07"
                     ),
@@ -265,21 +208,21 @@ async def seed_data():
                 )
 
                 rx_items_data = [
-                    (1, 1, 2, "Amlodipine 5 mg", "3 strip", "1x1 tablet pagi sesudah makan"),
-                    (2, 1, 1, "Paracetamol 500 mg", "1 strip", "3x1 tablet bila pusing"),
-                    (3, 2, 3, "Omeprazole 20 mg", "2 strip", "2x1 kapsul sebelum makan"),
-                    (4, 2, 4, "Antasida Doen", "2 strip", "3x1 tablet kunyah sebelum makan"),
+                    (1, 1, "Amlodipine 5 mg", "3 strip", "1x1 tablet pagi sesudah makan"),
+                    (2, 1, "Paracetamol 500 mg", "1 strip", "3x1 tablet bila pusing"),
+                    (3, 2, "Omeprazole 20 mg", "2 strip", "2x1 kapsul sebelum makan"),
+                    (4, 2, "Antasida Doen", "2 strip", "3x1 tablet kunyah sebelum makan"),
                 ]
                 await cur.executemany(
                     """
                     INSERT INTO prescription_items (
-                        id, prescription_id, medicine_id, medicine_name, quantity, dosage
-                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                        id, prescription_id, medicine_name, quantity, dosage
+                    ) VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (id) DO NOTHING;
                     """,
                     rx_items_data,
                 )
-                logger.info("[Seed] OK [5/7] prescriptions & prescription_items")
+                logger.info("[Seed] OK prescriptions & prescription_items")
 
                 # ── 6. AUDIT_LOGS AWAL ────────────────────────────────────
                 audit_data = [
@@ -299,7 +242,7 @@ async def seed_data():
                     """,
                     audit_data,
                 )
-                logger.info("[Seed] OK [6/7] audit_logs awal")
+                logger.info("[Seed] OK [5/6] audit_logs awal")
 
                 # ── 7. BACKUP_CONFIG & BACKUP_NODES ───────────────────────
                 await cur.execute(
@@ -349,7 +292,7 @@ async def seed_data():
                     """,
                     nodes_data,
                 )
-                logger.info("[Seed] OK [7/7] backup_config & backup_nodes")
+                logger.info("[Seed] OK [6/6] backup_config & backup_nodes")
 
                 # ── SINKRONISASI SEQUENCE POSTGRESQL ──────────────────────
                 sequences = [
@@ -358,7 +301,6 @@ async def seed_data():
                     ("doctors_id_seq", "doctors"),
                     ("consultations_id_seq", "consultations"),
                     ("medical_records_id_seq", "medical_records"),
-                    ("medicines_id_seq", "medicines"),
                     ("prescriptions_id_seq", "prescriptions"),
                     ("prescription_items_id_seq", "prescription_items"),
                     ("audit_logs_id_seq", "audit_logs"),

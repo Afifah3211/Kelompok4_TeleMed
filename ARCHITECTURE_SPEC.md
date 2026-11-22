@@ -2,7 +2,7 @@
 
 ## Tujuan
 
-TeleMed adalah aplikasi telemedis dan rekam medis elektronik untuk pasien, dokter, apoteker, dan admin. Frontend menyediakan alur UI berbasis peran; backend FastAPI menyediakan autentikasi, API, audit log, serta integrasi PostgreSQL dan penyimpanan file.
+TeleMed adalah aplikasi telemedis dan rekam medis elektronik untuk pasien, dokter, dan admin. Dokter menerbitkan resep sebagai bagian dari rekam medis; pasien membaca resepnya di portal. Aplikasi tidak memiliki akun apoteker atau modul stok farmasi. Frontend menyediakan alur UI berbasis peran; backend FastAPI menyediakan autentikasi, API, audit log, serta integrasi PostgreSQL dan penyimpanan file.
 
 ## Komponen dan alur
 

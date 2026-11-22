@@ -40,7 +40,7 @@ Jadwal yang dikonfigurasi: dump logis tiap 6 jam, base backup harian, sync file 
 1. Jalankan Docker Compose dan tunggu service `db` serta `backup` aktif/healthy.
 2. Pastikan tidak ada perubahan data aplikasi selama latihan, agar perbandingan jumlah baris merepresentasikan isi snapshot.
 3. Dari PowerShell pada root repository, jalankan `./dr_test.ps1`.
-4. Skrip meminta container `backup` membuat `pg_dump -Fc` ke `/backups/dr-test`, memeriksa arsip, lalu membuat database uji kosong.
+4. Skrip meminta container `backup` membuat `pg_dump -Fc` ke `/backups/dump`, memeriksa arsip, lalu membuat database uji kosong.
 5. Skrip merestore seluruh dump menggunakan `pg_restore`, membandingkan seluruh tabel dan jumlah baris, mengukur durasi restore+validasi, lalu menghapus database uji.
 6. Simpan output terminal dan screenshot. Jalankan `docker compose ... ps` setelahnya untuk membuktikan service tetap berjalan.
 

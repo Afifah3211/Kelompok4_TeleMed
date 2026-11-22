@@ -18,7 +18,7 @@ Backend layanan telemedis TeleMed (Kelompok 4) dibangun dengan Python 3.12, Fast
   > **Catatan Keterbatasan:** Endpoint ini menggunakan verifikasi NIK dan tanggal lahir terdaftar karena sistem saat ini belum memiliki integrasi email/SMTP service (keterbatasan infrastruktur belum tersedianya mail server).
 - `GET /api/users`: List seluruh user (admin).
 - `GET /api/users/doctors`: List seluruh dokter beserta spesialisasi (semua role login).
-- `GET /api/users/patients`: List data pasien (dokter, admin, apoteker).
+- `GET /api/users/patients`: List data pasien (dokter dan admin).
 - `POST /api/users/doctor`: Pembuatan akun dokter baru (admin).
 - `PATCH /api/users/{id}/toggle`: Toggle aktif/nonaktif akun (admin).
 - `PUT /api/users/{id}`: Pembaruan profil (diri sendiri atau admin).

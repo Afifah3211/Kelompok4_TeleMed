@@ -10,7 +10,6 @@ router = APIRouter()
 
 
 class PrescriptionItemInput(BaseModel):
-    medicine_id: Optional[int] = Field(None, alias="medicineId", ge=1)
     medicine_name: Optional[str] = Field(None, alias="medicineName", max_length=150)
     quantity: int = Field(..., ge=1, le=10000)
     dosage: str = Field(..., min_length=1, max_length=500)
@@ -60,29 +59,12 @@ async def resolve_prescription_items(cur, items: list[PrescriptionItemInput]):
     prescription_lines = []
 
     for item in items:
-        if item.medicine_id is not None:
-            await cur.execute(
-                "SELECT id, name, unit FROM medicines WHERE id = %s;",
-                (item.medicine_id,),
+        medicine_name = (item.medicine_name or "").strip()
+        if not medicine_name:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Nama obat wajib diisi.",
             )
-            medicine = await cur.fetchone()
-            if not medicine:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f"Obat dengan ID {item.medicine_id} tidak tersedia.",
-                )
-            medicine_id = medicine["id"]
-            medicine_name = medicine["name"]
-            unit = medicine["unit"] or "unit"
-        else:
-            medicine_id = None
-            medicine_name = (item.medicine_name or "").strip()
-            unit = "unit"
-            if not medicine_name:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Pilih obat dari katalog atau tuliskan nama obat yang diresepkan.",
-                )
 
         dosage = item.dosage.strip()
         if not dosage:
@@ -91,9 +73,8 @@ async def resolve_prescription_items(cur, items: list[PrescriptionItemInput]):
                 detail=f"Aturan pakai wajib diisi untuk {medicine_name}.",
             )
 
-        quantity = f"{item.quantity} {unit}"
+        quantity = f"{item.quantity} unit"
         resolved_items.append({
-            "medicine_id": medicine_id,
             "medicine_name": medicine_name,
             "quantity": quantity,
             "dosage": dosage,
@@ -317,12 +298,11 @@ async def create_medical_record(
                     await cur.execute(
                         """
                         INSERT INTO prescription_items (
-                            prescription_id, medicine_id, medicine_name, quantity, dosage
-                        ) VALUES (%s, %s, %s, %s, %s);
+                            prescription_id, medicine_name, quantity, dosage
+                        ) VALUES (%s, %s, %s, %s);
                         """,
                         (
                             created_prescription_id,
-                            item["medicine_id"],
                             item["medicine_name"],
                             item["quantity"],
                             item["dosage"],
@@ -486,12 +466,11 @@ async def update_medical_record(
                     await cur.execute(
                         """
                         INSERT INTO prescription_items (
-                            prescription_id, medicine_id, medicine_name, quantity, dosage
-                        ) VALUES (%s, %s, %s, %s, %s);
+                            prescription_id, medicine_name, quantity, dosage
+                        ) VALUES (%s, %s, %s, %s);
                         """,
                         (
                             prescription_id,
-                            item["medicine_id"],
                             item["medicine_name"],
                             item["quantity"],
                             item["dosage"],

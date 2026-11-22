@@ -82,7 +82,6 @@ class UpdateProfileRequest(BaseModel):
     allergies: Optional[str] = None
     specialization: Optional[str] = None
     strNumber: Optional[str] = None
-    sipaNumber: Optional[str] = None
     workplace: Optional[str] = None
 
 

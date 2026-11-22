@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI):
     await users.ensure_profile_recovery_schema()
     await chat.ensure_chat_schema()
     await video_signals.ensure_video_schema()
-    await prescriptions.ensure_prescription_status_schema()
+    await prescriptions.ensure_clinical_prescription_schema()
     try:
         files.init_minio_bucket()
         logger.info(f"MinIO bucket '{settings.MINIO_BUCKET}' berhasil diinisialisasi.")

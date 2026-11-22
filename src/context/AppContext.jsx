@@ -44,8 +44,6 @@ function buildCurrentUser(user, profile) {
     specialty: p.specialization || (role === 'dokter' ? 'Dokter Spesialis' : ''),
     strNumber: p.str_number || '',
     sip: p.str_number || '',
-    sipaNumber: '',
-    sipa: '',
     workplace: p.workplace || '',
     avatar: p.profile_photo_url || DEFAULT_AVATAR,
     profilePhotoUrl: p.profile_photo_url || '',
@@ -145,7 +143,6 @@ function normalizePrescription(p) {
     date: dateStr,
     prescriptionText: p.prescription_text || '',
     items: (p.items || []).map((it) => ({
-      medicineId: it.medicine_id,
       medicineName: it.medicine_name || '',
       quantity: it.quantity,
       dosage: it.dosage,

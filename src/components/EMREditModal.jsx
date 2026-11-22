@@ -4,7 +4,6 @@ import { Plus, Save, Trash2, X } from 'lucide-react';
 
 function getInitialItems(prescription) {
   return (prescription?.items || []).map((item) => ({
-    medicineId: '',
     medicineName: item.medicineName || '',
     quantity: String(Number.parseInt(String(item.quantity || '').match(/\d+/)?.[0] || '1', 10)),
     dosage: item.dosage || '',
@@ -75,13 +74,12 @@ export default function EMREditModal() {
     }
 
     const items = prescriptionItems.map((item) => ({
-      medicineId: null,
       medicineName: item.medicineName.trim(),
       quantity: Number(item.quantity),
       dosage: item.dosage.trim(),
     }));
     if (items.some((item) =>
-      (!item.medicineId && !item.medicineName) ||
+      !item.medicineName ||
       !Number.isInteger(item.quantity) ||
       item.quantity < 1 ||
       !item.dosage
@@ -164,7 +162,7 @@ export default function EMREditModal() {
                 <button
                   type="button"
                   className="btn btn-outline btn-sm"
-                  onClick={() => setPrescriptionItems((items) => [...items, { medicineId: '', medicineName: '', quantity: '1', dosage: '' }])}
+                  onClick={() => setPrescriptionItems((items) => [...items, { medicineName: '', quantity: '1', dosage: '' }])}
                 >
                   <Plus size={14} /> Tambah obat
                 </button>
