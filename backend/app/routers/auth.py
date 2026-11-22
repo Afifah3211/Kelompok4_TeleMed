@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.audit import audit
+from app.routers.files import _profile_photo_url
 from app.db import execute, fetch_one, transaction
 from app.limiter import limiter
 from app.normalization import normalize_gender
@@ -58,7 +59,7 @@ async def login(req: LoginRequest, request: Request):
         )
 
     user = await fetch_one(
-        "SELECT id, username, password_hash, role, is_active FROM users WHERE username = %s",
+        "SELECT id, username, password_hash, role, is_active, is_deleted FROM users WHERE username = %s",
         (req.username.strip(),),
     )
 
@@ -66,6 +67,12 @@ async def login(req: LoginRequest, request: Request):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Username atau password salah",
+        )
+
+    if user["is_deleted"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akun telah dihapus. Hubungi administrator untuk pemulihan",
         )
 
     if not user["is_active"]:
@@ -76,12 +83,18 @@ async def login(req: LoginRequest, request: Request):
 
     profile = None
     role = user["role"]
+    if role not in {"pasien", "dokter", "admin"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Role akun ini tidak lagi didukung",
+        )
     if role == "pasien":
         profile = await fetch_one("SELECT * FROM patients WHERE user_id = %s", (user["id"],))
     elif role == "dokter":
         profile = await fetch_one("SELECT * FROM doctors WHERE user_id = %s", (user["id"],))
-    elif role == "apoteker":
-        profile = await fetch_one("SELECT * FROM pharmacists WHERE user_id = %s", (user["id"],))
+    if profile is not None:
+        photo_key = profile.pop("profile_photo_key", None)
+        profile["profile_photo_url"] = _profile_photo_url(photo_key) if photo_key else None
 
     pid = profile["id"] if profile else None
     token = create_access_token(user_id=user["id"], role=role, pid=pid)
@@ -113,11 +126,13 @@ async def get_current_user_profile(
 ):
     """Mendapatkan data akun dan profil pengguna aktif dari JWT token."""
     user = await fetch_one(
-        "SELECT id, username, role, is_active, created_at FROM users WHERE id = %s",
+        "SELECT id, username, role, is_active, is_deleted, created_at FROM users WHERE id = %s",
         (current_user["id"],),
     )
     if not user:
         raise HTTPException(status_code=404, detail="Pengguna tidak ditemukan")
+    if user["is_deleted"] or user["role"] not in {"pasien", "dokter", "admin"}:
+        raise HTTPException(status_code=403, detail="Akun tidak lagi memiliki akses ke MediSync")
 
     profile = None
     role = user["role"]
@@ -125,8 +140,9 @@ async def get_current_user_profile(
         profile = await fetch_one("SELECT * FROM patients WHERE user_id = %s", (user["id"],))
     elif role == "dokter":
         profile = await fetch_one("SELECT * FROM doctors WHERE user_id = %s", (user["id"],))
-    elif role == "apoteker":
-        profile = await fetch_one("SELECT * FROM pharmacists WHERE user_id = %s", (user["id"],))
+    if profile is not None:
+        photo_key = profile.pop("profile_photo_key", None)
+        profile["profile_photo_url"] = _profile_photo_url(photo_key) if photo_key else None
 
     return {
         "user": user,

@@ -6,8 +6,7 @@ import {
   LogIn,
   ShieldCheck,
   Stethoscope,
-  User,
-  Pill
+  User
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -30,14 +29,13 @@ export default function Navbar() {
           </div>
           <div>
             <div className="brand-title">
-              TeleMed
+              MediSync
             </div>
             <div className="brand-subtitle">
               {isLoggedIn 
                 ? (currentUser.role === 'pasien' ? 'Portal Pasien' :
                    currentUser.role === 'dokter' ? 'Portal Dokter' :
-                   currentUser.role === 'admin' ? 'Portal Admin' :
-                   'Portal Farmasi')
+                   currentUser.role === 'admin' ? 'Portal Admin' : 'Portal Pengguna')
                 : 'Konsultasi Kesehatan Online'}
             </div>
           </div>
@@ -87,11 +85,6 @@ export default function Navbar() {
                   <ShieldCheck size={14} /> Admin
                 </span>
               )}
-              {currentUser.role === 'apoteker' && (
-                <span className="role-tag tag-apoteker">
-                  <Pill size={14} /> Apoteker
-                </span>
-              )}
             </div>
 
             {/* User Capsule */}
@@ -107,7 +100,6 @@ export default function Navbar() {
                   {currentUser.role === 'pasien' && (currentUser.nik ? `NIK: ${currentUser.nik}` : 'Pasien')}
                   {currentUser.role === 'dokter' && (currentUser.specialty || 'Dokter Spesialis')}
                   {currentUser.role === 'admin' && 'Administrator IT'}
-                  {currentUser.role === 'apoteker' && 'Apoteker Penanggung Jawab'}
                 </span>
               </div>
             </div>

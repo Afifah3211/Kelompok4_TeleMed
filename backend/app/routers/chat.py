@@ -50,7 +50,7 @@ async def _consultation_for_participant(
     consultation_id: int, user: dict[str, Any]
 ) -> dict[str, Any]:
     consultation = await fetch_one(
-        "SELECT id, patient_id, doctor_id, status, type FROM consultations WHERE id = %s;",
+        "SELECT id, patient_id, doctor_id, status, type FROM consultations WHERE id = %s AND is_deleted = FALSE;",
         (consultation_id,),
     )
     if not consultation:
@@ -67,10 +67,14 @@ async def _consultation_for_participant(
         )
 
     consultation_type = str(consultation.get("type") or "").strip().lower()
-    if "chat" not in consultation_type and "konsultasi online" not in consultation_type:
+    if (
+        "chat" not in consultation_type
+        and "konsultasi online" not in consultation_type
+        and "video" not in consultation_type
+    ):
         raise HTTPException(
             status_code=409,
-            detail="Chat dan lampiran hanya tersedia untuk konsultasi bermetode Chat",
+            detail="Chat dan lampiran hanya tersedia untuk konsultasi bermetode Chat atau Video Call",
         )
     return consultation
 

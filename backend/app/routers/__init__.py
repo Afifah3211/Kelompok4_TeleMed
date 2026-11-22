@@ -1,5 +1,6 @@
 # TeleMed Routers Package
 from app.routers import (
+    admin_recovery,
     audit_logs,
     auth,
     backup,
@@ -8,7 +9,7 @@ from app.routers import (
     files,
     health,
     medical_records,
-    medicines,
     prescriptions,
     users,
+    video_signals,
 )

@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import DashboardMetric from '../components/DashboardMetric';
+import ProfilePhotoUpload from '../components/ProfilePhotoUpload';
 import { isChatConsultation } from '../utils/consultation';
 import {
   Calendar,
@@ -10,14 +12,17 @@ import {
   Video,
   CheckCircle2,
   Trash2,
-  RotateCcw,
   Heart,
   Stethoscope,
   Eye,
   AlertTriangle,
-  Archive,
   MessageCircle,
-  Plus
+  Plus,
+  Pencil,
+  LayoutDashboard,
+  Activity,
+  ArrowRight,
+  TrendingUp
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -25,26 +30,116 @@ export default function DoctorEMR() {
   const {
     currentUser,
     appointments,
-    medicines,
+    updateUserProfile,
+    uploadProfilePhoto,
     updateAppointmentStatus,
     emrs,
     saveEMR,
-    softDeleteEMR,
-    restoreEMR,
+    deleteEMR,
+    setEditingEMR,
     setTeleconsultationSession,
     setViewingEMR,
     showToast
   } = useApp();
 
-  // Tab: examination queue or medical-record archive.
-  const [currentView, setCurrentView] = useState('emr-active');
+  // Tab: examination queue or medical records.
+  const [currentView, setCurrentView] = useState('overview');
+  const [profilePhoto, setProfilePhoto] = useState(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [doctorProfile, setDoctorProfile] = useState({
+    name: currentUser?.name || '',
+    specialization: currentUser?.specialization || '',
+    strNumber: currentUser?.strNumber || '',
+    phone: currentUser?.phone === '-' ? '' : currentUser?.phone || '',
+    workplace: currentUser?.workplace || '',
+  });
 
-  // The working queue contains only this doctor's consultations that still need action.
-  const doctorAppointments = appointments.filter(
+  useEffect(() => {
+    setDoctorProfile({
+      name: currentUser?.name || '',
+      specialization: currentUser?.specialization || '',
+      strNumber: currentUser?.strNumber || '',
+      phone: currentUser?.phone === '-' ? '' : currentUser?.phone || '',
+      workplace: currentUser?.workplace || '',
+    });
+  }, [currentUser?.id]);
+
+  const handleDoctorProfileSubmit = async (event) => {
+    event.preventDefault();
+    if (savingProfile) return;
+    setSavingProfile(true);
+    try {
+      const profileSaved = await updateUserProfile(doctorProfile);
+      if (profileSaved && profilePhoto) {
+        const photoSaved = await uploadProfilePhoto(profilePhoto);
+        if (photoSaved) setProfilePhoto(null);
+      }
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const consultationIdsWithRecords = new Set(
+    emrs
+      .filter((record) => record.consultationId)
+      .map((record) => Number(record.consultationId))
+  );
+
+  // Ended consultations remain available until their medical record is saved.
+  const assignedAppointments = appointments.filter(
+    (appointment) => Number(appointment.doctorId) === Number(currentUser?.doctorId)
+  );
+  const doctorAppointments = assignedAppointments.filter(
+    (appointment) =>
+      (
+        ['Menunggu', 'Sedang Berlangsung'].includes(appointment.status) ||
+        (appointment.status === 'Selesai' && !consultationIdsWithRecords.has(Number(appointment.id)))
+      )
+  );
+  const completedChatAppointments = appointments.filter(
     (appointment) =>
       Number(appointment.doctorId) === Number(currentUser?.doctorId) &&
-      ['Menunggu', 'Sedang Berlangsung'].includes(appointment.status)
+      appointment.status === 'Selesai'
   );
+  const visibleEMRs = emrs.filter((record) => !record.isDeleted);
+  const today = new Date();
+  const todayKey = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-');
+  const todayDoctorAppointments = assignedAppointments.filter(
+    (appointment) => appointment.date === todayKey && appointment.status !== 'Dibatalkan'
+  );
+  const waitingConsultations = assignedAppointments.filter(
+    (appointment) => appointment.status === 'Menunggu'
+  ).length;
+  const activeConsultations = assignedAppointments.filter(
+    (appointment) => appointment.status === 'Sedang Berlangsung'
+  ).length;
+  const consultationsToRecord = doctorAppointments.filter(
+    (appointment) => appointment.status === 'Selesai'
+  ).length;
+  const doctorTrend = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - 6 + index);
+    const dateKey = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+    return {
+      dateKey,
+      label: date.toLocaleDateString('id-ID', { weekday: 'short' }),
+      count: assignedAppointments.filter((appointment) => appointment.date === dateKey).length,
+    };
+  });
+  const maxDoctorTrend = Math.max(1, ...doctorTrend.map((day) => day.count));
+  const dashboardAgenda = [...doctorAppointments]
+    .sort((first, second) => `${first.date} ${first.time}`.localeCompare(`${second.date} ${second.time}`))
+    .slice(0, 5);
+  const recentDoctorEMRs = visibleEMRs.slice(0, 5);
 
   // Selected patient for active consultation (default to first active appointment)
   const [selectedAppointmentId, setSelectedAppointmentId] = useState('');
@@ -56,6 +151,15 @@ export default function DoctorEMR() {
   }, [doctorAppointments, selectedAppointmentId]);
 
   const selectedAppointment = doctorAppointments.find((a) => a.id === selectedAppointmentId);
+  const patientDemographic = selectedAppointment
+    ? [
+        selectedAppointment.patientNik ? `NIK: ${selectedAppointment.patientNik}` : '',
+        selectedAppointment.patientAge ? `Usia: ${selectedAppointment.patientAge} thn` : '',
+        selectedAppointment.patientGender && selectedAppointment.patientGender !== '-'
+          ? `Gender: ${selectedAppointment.patientGender}`
+          : '',
+      ].filter(Boolean).join(' | ')
+    : '';
 
   // Consultation Form state (PRD Spec: 'Keluhan', 'Diagnosis', 'Tindakan', 'Resep Obat')
   const [complaint, setComplaint] = useState(selectedAppointment?.complaint || '');
@@ -64,6 +168,7 @@ export default function DoctorEMR() {
   const [prescriptionItems, setPrescriptionItems] = useState([]);
   const [prescriptionNote, setPrescriptionNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [vitals, setVitals] = useState({
     bp: '',
     heartRate: '',
@@ -101,6 +206,10 @@ export default function DoctorEMR() {
       alert('Pilih pasien antrean terlebih dahulu.');
       return;
     }
+    if (!['Sedang Berlangsung', 'Selesai'].includes(selectedAppointment.status)) {
+      alert('Mulai konsultasi terlebih dahulu sebelum menyimpan rekam medis.');
+      return;
+    }
     if (!diagnosis.trim()) {
       alert('Harap isi Diagnosis pemeriksaan.');
       return;
@@ -108,12 +217,18 @@ export default function DoctorEMR() {
 
     const completedItems = prescriptionItems.map((item) => ({
       ...item,
-      medicineId: Number(item.medicineId),
+      medicineId: item.medicineId ? Number(item.medicineId) : null,
+      medicineName: item.medicineId ? null : item.medicineName.trim(),
       quantity: Number(item.quantity),
       dosage: item.dosage.trim(),
     }));
-    if (completedItems.some((item) => !item.medicineId || !item.quantity || !item.dosage)) {
-      alert('Lengkapi obat, jumlah, dan aturan pakai pada setiap item resep.');
+    if (completedItems.some((item) =>
+      (!item.medicineId && !item.medicineName) ||
+      !Number.isInteger(item.quantity) ||
+      item.quantity < 1 ||
+      !item.dosage
+    )) {
+      alert('Lengkapi nama obat, jumlah, dan aturan pakai pada setiap item resep.');
       return;
     }
 
@@ -138,6 +253,20 @@ export default function DoctorEMR() {
       console.error('Gagal menyimpan rekam medis:', error);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleStartConsultation = async () => {
+    if (!selectedAppointment || starting) return;
+    setStarting(true);
+    try {
+      const updatedAppointment = await updateAppointmentStatus(
+        selectedAppointment.id,
+        'Sedang Berlangsung'
+      );
+      if (updatedAppointment) setTeleconsultationSession(updatedAppointment);
+    } finally {
+      setStarting(false);
     }
   };
 
@@ -177,13 +306,21 @@ export default function DoctorEMR() {
               Portal Dokter
             </h1>
             <div style={{ fontSize: '0.82rem', color: '#64748B' }}>
-              {currentUser.name} • {currentUser.specialty || 'Dokter Spesialis'} • SIP: {currentUser.sip || '446/123/SIP/2022'}
+              {currentUser.name} • {currentUser.specialty || 'Dokter'} • SIP: {currentUser.sip || '-'}
             </div>
           </div>
         </div>
 
-        {/* View Switcher: consultation queue and medical-record archive */}
+        {/* View Switcher: dashboard, consultation queue, and medical records */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            className={`btn btn-sm ${currentView === 'overview' ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setCurrentView('overview')}
+          >
+            <LayoutDashboard size={16} />
+            <span>Dashboard</span>
+          </button>
+
           <button
             className={`btn btn-sm ${currentView === 'emr-active' ? 'btn-primary' : 'btn-outline'}`}
             onClick={() => setCurrentView('emr-active')}
@@ -196,12 +333,178 @@ export default function DoctorEMR() {
             className={`btn btn-sm ${currentView === 'arsip' ? 'btn-primary' : 'btn-outline'}`}
             onClick={() => setCurrentView('arsip')}
           >
-            <Archive size={16} />
-            <span>Arsip rekam medis ({emrs.length})</span>
+            <FileText size={16} />
+            <span>Rekam medis ({visibleEMRs.length})</span>
           </button>
 
+          <button
+            className={`btn btn-sm ${currentView === 'chat-history' ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setCurrentView('chat-history')}
+          >
+            <MessageCircle size={16} />
+            <span>Riwayat Chat ({completedChatAppointments.length})</span>
+          </button>
+
+          <button
+            className={`btn btn-sm ${currentView === 'profile' ? 'btn-primary' : 'btn-outline'}`}
+            onClick={() => setCurrentView('profile')}
+          >
+            <User size={16} />
+            <span>Profil Saya</span>
+          </button>
         </div>
       </div>
+
+      {currentView === 'overview' && (
+        <div className="doctor-dashboard">
+          <div className="doctor-dashboard-heading">
+            <div>
+              <h2>Selamat datang, dr. {currentUser.name}</h2>
+              <p>{today.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+            </div>
+            <button type="button" className="btn btn-primary" onClick={() => setCurrentView('emr-active')}>
+              Buka antrean <ArrowRight size={16} />
+            </button>
+          </div>
+
+          <div className="dashboard-metrics">
+            <DashboardMetric
+              icon={Calendar}
+              label="Jadwal hari ini"
+              value={todayDoctorAppointments.length}
+              note="Konsultasi terjadwal"
+              color="#2563EB"
+              onClick={() => setCurrentView('emr-active')}
+            />
+            <DashboardMetric
+              icon={Clock}
+              label="Menunggu"
+              value={waitingConsultations}
+              note="Pasien dalam antrean"
+              color="#D97706"
+              onClick={() => setCurrentView('emr-active')}
+            />
+            <DashboardMetric
+              icon={Activity}
+              label="Sedang konsultasi"
+              value={activeConsultations}
+              note="Sesi berlangsung"
+              color="#0F766E"
+              onClick={() => setCurrentView('emr-active')}
+            />
+            <DashboardMetric
+              icon={FileText}
+              label="Perlu rekam medis"
+              value={consultationsToRecord}
+              note="Konsultasi selesai"
+              color="#7C3AED"
+              onClick={() => setCurrentView('emr-active')}
+            />
+            <DashboardMetric
+              icon={CheckCircle2}
+              label="Rekam medis aktif"
+              value={visibleEMRs.length}
+              note="Tersimpan di sistem"
+              color="#0891B2"
+              onClick={() => setCurrentView('arsip')}
+            />
+          </div>
+
+          <div className="dashboard-columns">
+            <section className="card dashboard-panel">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title"><TrendingUp size={19} color="#4F46E5" /> Aktivitas konsultasi</h2>
+                  <p className="dashboard-panel-note">Jadwal konsultasi tujuh hari terakhir.</p>
+                </div>
+              </div>
+              <div
+                className="dashboard-trend-chart doctor-trend-chart"
+                role="img"
+                aria-label="Grafik konsultasi tujuh hari terakhir"
+                style={{ gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}
+              >
+                {doctorTrend.map((day) => (
+                  <div className="dashboard-trend-column" key={day.dateKey} title={`${day.label}: ${day.count} konsultasi`}>
+                    <span className="dashboard-trend-value">{day.count || ''}</span>
+                    <div className="dashboard-trend-track">
+                      <div className="dashboard-trend-bar" style={{ height: `${day.count ? Math.max(10, (day.count / maxDoctorTrend) * 100) : 4}%` }} />
+                    </div>
+                    <span className="dashboard-trend-label">{day.label}</span>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="card dashboard-panel">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title"><Calendar size={19} color="#0F766E" /> Agenda berikutnya</h2>
+                  <p className="dashboard-panel-note">Antrean dan rekam medis yang perlu ditindaklanjuti.</p>
+                </div>
+              </div>
+              {dashboardAgenda.length === 0 ? (
+                <p className="doctor-dashboard-empty">Belum ada agenda yang perlu ditindaklanjuti.</p>
+              ) : (
+                <div className="doctor-dashboard-list">
+                  {dashboardAgenda.map((appointment) => (
+                    <button
+                      type="button"
+                      className="doctor-dashboard-list-item"
+                      key={appointment.id}
+                      onClick={() => {
+                        handleSelectAppointment(appointment);
+                        setCurrentView('emr-active');
+                      }}
+                    >
+                      <span className="doctor-dashboard-list-icon"><User size={17} /></span>
+                      <span className="doctor-dashboard-list-copy">
+                        <strong>{appointment.patientName}</strong>
+                        <span>{appointment.date} · {appointment.time}</span>
+                      </span>
+                      <span className="doctor-dashboard-status">{appointment.status === 'Selesai' ? 'Perlu rekam medis' : appointment.status}</span>
+                      <ArrowRight size={16} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="card dashboard-panel doctor-dashboard-records">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title"><FileText size={19} color="#0891B2" /> Rekam medis terbaru</h2>
+                  <p className="dashboard-panel-note">Akses cepat ke catatan pemeriksaan pasien.</p>
+                </div>
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => setCurrentView('arsip')}>
+                  Lihat semua <ArrowRight size={14} />
+                </button>
+              </div>
+              {recentDoctorEMRs.length === 0 ? (
+                <p className="doctor-dashboard-empty">Belum ada rekam medis aktif.</p>
+              ) : (
+                <div className="doctor-dashboard-list">
+                  {recentDoctorEMRs.map((record) => (
+                    <button
+                      type="button"
+                      className="doctor-dashboard-list-item"
+                      key={record.id}
+                      onClick={() => setViewingEMR(record)}
+                    >
+                      <span className="doctor-dashboard-list-icon"><FileText size={17} /></span>
+                      <span className="doctor-dashboard-list-copy">
+                        <strong>{record.patientName}</strong>
+                        <span>{record.date} · {record.diagnosis || 'Tanpa diagnosis'}</span>
+                      </span>
+                      <ArrowRight size={16} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        </div>
+      )}
 
       {/* =========================================================================
           VIEW 1: SPLIT SCREEN LAYOUT (PRD Halaman 3 Prompt 2)
@@ -220,7 +523,7 @@ export default function DoctorEMR() {
       ) : (
         <div className="doctor-workspace" style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 380px) minmax(0, 1fr)', gap: '20px', alignItems: 'start' }}>
           {/* Left Column: Jadwal Hari Ini / Today's appointments */}
-          <div className="card" style={{ padding: '20px' }}>
+          <div className="card doctor-queue-sticky" style={{ padding: '20px' }}>
             <div className="card-header" style={{ marginBottom: '14px', paddingBottom: '12px' }}>
               <div>
                 <h2 className="card-title" style={{ fontSize: '1.05rem' }}>
@@ -333,7 +636,7 @@ export default function DoctorEMR() {
                         {selectedAppointment.patientName}
                       </div>
                       <div style={{ fontSize: '0.8rem', color: '#64748B' }}>
-                        NIK: {selectedAppointment.patientNik}{selectedAppointment.patientAge ? ` | Usia: ${selectedAppointment.patientAge} thn` : '}{selectedAppointment.patientGender ? ` | Gender: ${selectedAppointment.patientGender}` : '}
+                        {patientDemographic}
                       </div>
                     </div>
                   </div>
@@ -344,14 +647,15 @@ export default function DoctorEMR() {
                         type="button"
                         className="btn btn-sm"
                         style={{ background: '#0F766E', color: '#fff', display: 'flex', alignItems: 'center', gap: '6px' }}
-                        onClick={() => updateAppointmentStatus(selectedAppointment.id, 'Sedang Berlangsung')}
+                        onClick={handleStartConsultation}
+                        disabled={starting}
                       >
                         <CheckCircle2 size={15} />
-                        <span>Mulai Konsultasi</span>
+                        <span>{starting ? 'Memulai…' : 'Mulai Konsultasi'}</span>
                       </button>
                     )}
 
-                    <button
+                    {selectedAppointment.status === 'Sedang Berlangsung' && <button
                       type="button"
                       className="btn btn-outline btn-sm"
                       onClick={() => setTeleconsultationSession(selectedAppointment)}
@@ -359,7 +663,7 @@ export default function DoctorEMR() {
                     >
                       {isChatConsultation(selectedAppointment.type) ? <MessageCircle size={15} /> : <Video size={15} />}
                       <span>{isChatConsultation(selectedAppointment.type) ? 'Buka Chat Konsultasi' : 'Buka Ruang Video'}</span>
-                    </button>
+                    </button>}
                   </div>
                 </div>
 
@@ -452,37 +756,32 @@ export default function DoctorEMR() {
                   />
                 </div>
 
-                {/* Structured e-prescription linked to the pharmacy catalog */}
+                {/* Structured prescription recorded in the medical record */}
                 <div className="form-group">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-                    <label className="form-label" style={{ margin: 0 }}>Resep Elektronik untuk Apoteker (opsional)</label>
-                    <button type="button" className="btn btn-outline btn-sm" onClick={() => setPrescriptionItems((items) => [...items, { medicineId: '', quantity: 1, dosage: '' }])} disabled={medicines.length === 0}>
+                    <label className="form-label" style={{ margin: 0 }}>Resep obat (opsional)</label>
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => setPrescriptionItems((items) => [...items, { medicineId: '', medicineName: '', quantity: 1, dosage: '' }])}>
                       <Plus size={15} /> Tambah Obat
                     </button>
                   </div>
                   <p style={{ color: '#64748B', fontSize: 12, margin: '0 0 10px' }}>
-                    Jika resep diterbitkan, obat dipilih dari katalog agar nama dan stok cocok dengan data farmasi. Tanpa item resep, rekam medis tetap tersimpan tanpa masuk antrean apoteker.
+                    Tulis nama obat secara manual; resep tetap tersimpan meskipun obat belum ada di daftar.
                   </p>
-                  {medicines.length === 0 && <p style={{ color: '#B45309', fontSize: 12 }}>Katalog obat belum tersedia; minta apoteker mengisi inventori terlebih dahulu.</p>}
                   {prescriptionItems.length > 0 && (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1.4fr) 110px minmax(200px, 1.5fr) auto', gap: 8, marginBottom: 5, color: '#64748B', fontSize: 11 }}>
-                      <span>Obat dari katalog</span><span>Jumlah unit</span><span>Aturan pakai / dosis</span><span />
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1.4fr) 100px minmax(180px, 1.5fr) auto', gap: 8, marginBottom: 5, color: '#64748B', fontSize: 11 }}>
+                      <span>Nama obat</span><span>Jumlah</span><span>Aturan pakai / dosis</span><span />
                     </div>
                   )}
                   {prescriptionItems.map((item, index) => (
-                    <div key={index} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1.4fr) 110px minmax(200px, 1.5fr) auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                      <select className="form-select" value={item.medicineId} required onChange={(event) => setPrescriptionItems((items) => items.map((row, rowIndex) => rowIndex === index ? { ...row, medicineId: event.target.value } : row))}>
-                        <option value="">Pilih obat katalog</option>
-                        {medicines.map((medicine) => <option key={medicine.id} value={medicine.id}>{medicine.name} — stok {medicine.stock} {medicine.unit}</option>)}
-                      </select>
+                    <div key={index} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 1.4fr) 100px minmax(180px, 1.5fr) auto', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                      <input className="form-input" type="text" maxLength={150} required placeholder="Nama obat" aria-label="Nama obat" value={item.medicineName} onChange={(event) => setPrescriptionItems((items) => items.map((row, rowIndex) => rowIndex === index ? { ...row, medicineId: '', medicineName: event.target.value } : row))} />
                       <input className="form-input" type="number" min="1" step="1" required aria-label="Jumlah unit stok" value={item.quantity} onChange={(event) => setPrescriptionItems((items) => items.map((row, rowIndex) => rowIndex === index ? { ...row, quantity: event.target.value } : row))} />
                       <input className="form-input" type="text" maxLength={500} required placeholder="Aturan pakai / dosis" value={item.dosage} onChange={(event) => setPrescriptionItems((items) => items.map((row, rowIndex) => rowIndex === index ? { ...row, dosage: event.target.value } : row))} />
                       <button type="button" className="btn btn-outline btn-sm" aria-label="Hapus item resep" onClick={() => setPrescriptionItems((items) => items.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={15} /></button>
-                      {item.medicineId && <small style={{ gridColumn: '1 / -1', color: '#64748B' }}>Jumlah dihitung dalam unit stok: {medicines.find((medicine) => Number(medicine.id) === Number(item.medicineId))?.unit || 'unit'}.</small>}
                     </div>
                   ))}
                   {prescriptionItems.length > 0 && (
-                    <textarea className="form-textarea" maxLength={1000} placeholder="Catatan dokter untuk apoteker (opsional), misalnya substitusi tidak diperbolehkan." value={prescriptionNote} onChange={(event) => setPrescriptionNote(event.target.value)} />
+                    <textarea className="form-textarea" maxLength={1000} placeholder="Catatan resep untuk pasien (opsional)." value={prescriptionNote} onChange={(event) => setPrescriptionNote(event.target.value)} />
                   )}
                 </div>
 
@@ -491,7 +790,7 @@ export default function DoctorEMR() {
                   <button
                     type="submit"
                     className="btn btn-primary btn-lg"
-                    disabled={saving}
+                    disabled={saving || !['Sedang Berlangsung', 'Selesai'].includes(selectedAppointment.status)}
                     style={{
                       backgroundColor: '#1D4ED8',
                       boxShadow: '0 4px 14px rgba(29, 78, 216, 0.3)',
@@ -515,18 +814,18 @@ export default function DoctorEMR() {
       ))}
 
       {/* =========================================================================
-          VIEW 2: ARSIP REKAM MEDIS & SOFT DELETE (PRD Goals & Section 4)
+          VIEW 2: ARSIP REKAM MEDIS
          ========================================================================= */}
       {currentView === 'arsip' && (
         <div className="card">
           <div className="card-header">
             <div>
               <h2 className="card-title">
-                <Archive size={20} color="#1D4ED8" />
-                Arsip rekam medis
+                <FileText size={20} color="#1D4ED8" />
+                Rekam medis
               </h2>
               <p style={{ fontSize: '0.82rem', color: '#64748B', marginTop: '2px' }}>
-                Lihat catatan pemeriksaan dan pulihkan data yang diarsipkan bila diperlukan.
+                Lihat catatan pemeriksaan aktif. Rekam medis yang dihapus tidak lagi tampil di portal dokter.
               </p>
             </div>
           </div>
@@ -548,7 +847,13 @@ export default function DoctorEMR() {
                 </tr>
               </thead>
               <tbody>
-                {emrs.map((item) => (
+                {visibleEMRs.length === 0 ? (
+                  <tr>
+                    <td colSpan="7" style={{ textAlign: 'center', color: '#64748B', padding: 20 }}>
+                      Belum ada rekam medis aktif.
+                    </td>
+                  </tr>
+                ) : visibleEMRs.map((item) => (
                   <tr key={item.id} style={{ opacity: item.isDeleted ? 0.8 : 1, backgroundColor: item.isDeleted ? '#FFF5F5' : 'inherit' }}>
                     <td>
                       <span style={{ fontWeight: 700, color: item.isDeleted ? '#DC2626' : '#1D4ED8' }}>
@@ -568,7 +873,7 @@ export default function DoctorEMR() {
                       {item.isDeleted ? (
                         <div>
                           <span className="badge badge-danger">
-                            <AlertTriangle size={12} /> Terhapus (Soft Delete)
+                            <AlertTriangle size={12} /> Dihapus
                           </span>
                           <div style={{ fontSize: '0.72rem', color: '#DC2626', marginTop: '3px' }}>
                             {item.deletedAt}
@@ -590,24 +895,29 @@ export default function DoctorEMR() {
                           <Eye size={14} /> Detail
                         </button>
 
-                        {item.isDeleted ? (
+                        {!item.isDeleted && (
                           <button
-                            className="btn btn-sm btn-primary"
-                            onClick={() => restoreEMR(item.id)}
-                            title="Pulihkan data rekam medis"
+                            className="btn btn-outline btn-sm"
+                            onClick={() => setEditingEMR(item)}
+                            title="Edit rekam medis"
                           >
-                            <RotateCcw size={14} /> Pulihkan
+                            <Pencil size={14} /> Edit
                           </button>
-                        ) : (
+                        )}
+
+                        {!item.isDeleted && (
                           <button
                             className="btn btn-danger-outline btn-sm"
-                            onClick={() => {
-                              const reason = prompt('Masukkan alasan soft delete rekam medis:', 'Koreksi administratif data rekam medis');
-                              if (reason) softDeleteEMR(item.id, reason);
+                            onClick={async () => {
+                              const confirmed = window.confirm(
+                                'Peringatan: rekam medis akan dihapus dan tidak dapat dipulihkan oleh dokter. Hanya admin yang dapat memulihkannya. Lanjutkan?'
+                              );
+                              if (!confirmed) return;
+                              await deleteEMR(item.id);
                             }}
-                            title="Lakukan soft delete pada rekam medis ini"
+                            title="Hapus rekam medis ini"
                           >
-                            <Trash2 size={14} /> Soft Delete
+                            <Trash2 size={14} /> Hapus
                           </button>
                         )}
                       </div>
@@ -617,6 +927,82 @@ export default function DoctorEMR() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {currentView === 'chat-history' && (
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <h2 className="card-title"><MessageCircle size={20} color="#0F766E" /> Riwayat Chat Konsultasi</h2>
+              <p style={{ fontSize: '0.82rem', color: '#64748B', marginTop: 4 }}>
+                Percakapan dari konsultasi chat maupun video yang telah selesai dapat dibaca kembali.
+              </p>
+            </div>
+          </div>
+          {completedChatAppointments.length === 0 ? (
+            <p style={{ padding: '4px 0', color: '#64748B' }}>Belum ada riwayat konsultasi chat.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {completedChatAppointments.map((appointment) => (
+                <div key={appointment.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: 12, border: '1px solid #E2E8F0', borderRadius: 10 }}>
+                  <div>
+                    <strong>{appointment.patientName}</strong>
+                    <div style={{ color: '#64748B', fontSize: 13 }}>{appointment.type} · {appointment.date} · {appointment.time}</div>
+                    <div style={{ color: '#64748B', fontSize: 12 }}>{appointment.complaint || 'Tidak ada keluhan tercatat'}</div>
+                  </div>
+                  <button type="button" className="btn btn-outline btn-sm" onClick={() => setTeleconsultationSession(appointment)}>
+                    <MessageCircle size={15} /> Buka Chat
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {currentView === 'profile' && (
+        <div className="card" style={{ padding: 24 }}>
+          <div className="card-header">
+            <div>
+              <h2 className="card-title"><User size={20} color="#0F766E" /> Profil Dokter</h2>
+              <p style={{ fontSize: '0.82rem', color: '#64748B', marginTop: 4 }}>
+                Kelola informasi profesional dan foto profil yang ditampilkan kepada pasien.
+              </p>
+            </div>
+          </div>
+          <form onSubmit={handleDoctorProfileSubmit}>
+            <div style={{ padding: '4px 0 22px' }}>
+              <ProfilePhotoUpload file={profilePhoto} onFileChange={setProfilePhoto} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div className="form-group">
+                <label className="form-label">Nama dokter</label>
+                <input className="form-input" value={doctorProfile.name} onChange={(event) => setDoctorProfile({ ...doctorProfile, name: event.target.value })} required />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Spesialisasi</label>
+                <input className="form-input" value={doctorProfile.specialization} onChange={(event) => setDoctorProfile({ ...doctorProfile, specialization: event.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Nomor STR / SIP</label>
+                <input className="form-input" value={doctorProfile.strNumber} onChange={(event) => setDoctorProfile({ ...doctorProfile, strNumber: event.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Nomor telepon</label>
+                <input className="form-input" value={doctorProfile.phone} onChange={(event) => setDoctorProfile({ ...doctorProfile, phone: event.target.value })} />
+              </div>
+              <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                <label className="form-label">Tempat praktik</label>
+                <input className="form-input" value={doctorProfile.workplace} onChange={(event) => setDoctorProfile({ ...doctorProfile, workplace: event.target.value })} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="submit" className="btn btn-primary" disabled={savingProfile}>
+                <Save size={16} /> {savingProfile ? 'Menyimpan…' : 'Simpan Profil'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

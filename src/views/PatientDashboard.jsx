@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { isChatConsultation } from '../utils/consultation';
+import ProfilePhotoUpload from '../components/ProfilePhotoUpload';
 import { 
   User, 
   Calendar, 
@@ -25,10 +26,11 @@ export default function PatientDashboard() {
   const { 
     currentUser, 
     updateUserProfile,
+    uploadProfilePhoto,
     appointments, 
+    updateAppointmentStatus,
     emrs, 
     prescriptions,
-    refreshPrescriptions,
     setTeleconsultationSession, 
     setIsBookingOpen, 
     setViewingEMR,
@@ -36,16 +38,8 @@ export default function PatientDashboard() {
   } = useApp();
 
   const [activeTab, setActiveTab] = useState('jadwal'); // 'jadwal', 'riwayat', 'resep', 'profil'
-
-  useEffect(() => {
-    const refresh = () => {
-      if (document.visibilityState === 'visible') {
-        refreshPrescriptions().catch((error) => console.warn('Gagal memperbarui status resep:', error));
-      }
-    };
-    const timer = window.setInterval(refresh, 20000);
-    return () => window.clearInterval(timer);
-  }, [refreshPrescriptions]);
+  const [profilePhoto, setProfilePhoto] = useState(null);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   // Patient profile form state
   const [profileForm, setProfileForm] = useState({
@@ -66,18 +60,28 @@ export default function PatientDashboard() {
     (a) => a.status === 'Selesai' && isChatConsultation(a.type)
   );
   
-  // Filter EMRs for current patient (excluding soft-deleted ones from regular patient view)
+  // Filter EMRs for this patient, excluding archived records.
   const patientEMRs = emrs.filter((e) => Number(e.patientId) === Number(currentUser.patientId) && !e.isDeleted);
 
   // Filter Prescriptions for current patient
   const patientPrescriptions = (prescriptions || []).filter((p) => Number(p.patientId) === Number(currentUser.patientId));
 
-  const handleProfileSubmit = (e) => {
+  const handleProfileSubmit = async (e) => {
     e.preventDefault();
-    updateUserProfile({
-      id: currentUser.id,
-      ...profileForm
-    });
+    if (savingProfile) return;
+    setSavingProfile(true);
+    try {
+      const profileSaved = await updateUserProfile({
+        id: currentUser.id,
+        ...profileForm
+      });
+      if (profileSaved && profilePhoto) {
+        const photoSaved = await uploadProfilePhoto(profilePhoto);
+        if (photoSaved) setProfilePhoto(null);
+      }
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   return (
@@ -361,8 +365,8 @@ export default function PatientDashboard() {
                         </div>
                       </div>
 
-                      {/* Blue 'Gabung' button (PRD Prompt Halaman 3) */}
                       <div>
+                        {apt.status === 'Sedang Berlangsung' ? (
                         <button
                           className="btn btn-primary"
                           onClick={() => setTeleconsultationSession(apt)}
@@ -379,6 +383,24 @@ export default function PatientDashboard() {
                           {isChatConsultation(apt.type) ? <MessageCircle size={18} /> : <Video size={18} />}
                           <span>{isChatConsultation(apt.type) ? 'Buka Chat' : 'Buka Ruang Video'}</span>
                         </button>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                            <span style={{ color: '#64748B', fontSize: 13 }}>Menunggu dokter memulai konsultasi</span>
+                            {apt.status === 'Menunggu' && (
+                              <button
+                                type="button"
+                                className="btn btn-outline btn-sm"
+                                onClick={() => {
+                                  if (window.confirm('Batalkan jadwal konsultasi ini?')) {
+                                    updateAppointmentStatus(apt.id, 'Dibatalkan');
+                                  }
+                                }}
+                              >
+                                Batalkan konsultasi
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -508,6 +530,9 @@ export default function PatientDashboard() {
             </div>
 
             <form onSubmit={handleProfileSubmit}>
+              <div style={{ padding: '0 24px 20px' }}>
+                <ProfilePhotoUpload file={profilePhoto} onFileChange={setProfilePhoto} />
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
                 <div className="form-group">
                   <label className="form-label">Nomor Induk Kependudukan (NIK)</label>
@@ -605,26 +630,26 @@ export default function PatientDashboard() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
-                <button type="submit" className="btn btn-primary">
+                <button type="submit" className="btn btn-primary" disabled={savingProfile}>
                   <Save size={16} />
-                  <span>Simpan Perubahan Profil</span>
+                  <span>{savingProfile ? 'Menyimpan…' : 'Simpan Perubahan Profil'}</span>
                 </button>
               </div>
             </form>
           </div>
         )}
 
-        {/* VIEW 4: RESEP & OBAT SAYA (FARMASI & APOTEKER INTEGRASI) */}
+        {/* Resep dokter */}
         {activeTab === 'resep' && (
           <div className="card" style={{ padding: '24px' }}>
             <div className="card-header" style={{ marginBottom: '20px', paddingBottom: '16px' }}>
               <div>
                 <h2 className="card-title" style={{ fontSize: '1.25rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Pill size={22} color="#059669" />
-                  <span>Resep & Obat Digital</span>
+                  <span>Resep Dokter</span>
                 </h2>
                 <p style={{ fontSize: '0.85rem', color: '#64748B', marginTop: '2px' }}>
-                  Pantau status penyiapan obat oleh apoteker dan rincian aturan minum obat Anda
+                  Resep yang diterbitkan dokter dan tersimpan bersama rekam medis Anda
                 </p>
               </div>
             </div>
@@ -632,7 +657,7 @@ export default function PatientDashboard() {
             {patientPrescriptions.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '48px 20px', background: '#F8FAFC', borderRadius: '12px' }}>
                 <Pill size={40} color="#94A3B8" style={{ margin: '0 auto 12px' }} />
-                <h3 style={{ fontSize: '1.05rem', color: '#1E293B', marginBottom: '4px' }}>Belum Ada Resep Obat Aktif</h3>
+                <h3 style={{ fontSize: '1.05rem', color: '#1E293B', marginBottom: '4px' }}>Belum Ada Resep Dokter</h3>
                 <p style={{ fontSize: '0.85rem', color: '#64748B' }}>
                   Resep akan otomatis muncul di sini setelah dokter menyelesaikan sesi telekonsultasi.
                 </p>
@@ -650,80 +675,25 @@ export default function PatientDashboard() {
                       boxShadow: 'var(--shadow-sm)'
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '14px', borderBottom: '1px solid #F1F5F9', paddingBottom: '12px' }}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ fontWeight: 800, color: '#1E293B', fontSize: '1.05rem' }}>{rx.id}</span>
-                          <span style={{ fontSize: '0.75rem', color: '#64748B' }}>• {rx.date}</span>
-                        </div>
-                        <div style={{ fontSize: '0.82rem', color: '#0F766E', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                          <Stethoscope size={14} /> Dokter: {rx.doctorName}
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span 
-                          style={{
-                            fontSize: '0.78rem',
-                            fontWeight: 700,
-                            padding: '4px 10px',
-                            borderRadius: '20px',
-                            background: rx.status.includes('Selesai') ? '#DCFCE7' : rx.status.includes('Diramu') || rx.status.includes('Dikembalikan') ? '#FEF3C7' : '#EFF6FF',
-                            color: rx.status.includes('Selesai') ? '#15803D' : rx.status.includes('Diramu') || rx.status.includes('Dikembalikan') ? '#B45309' : '#1D4ED8',
-                            border: '1px solid',
-                            borderColor: rx.status.includes('Selesai') ? '#86EFAC' : rx.status.includes('Diramu') || rx.status.includes('Dikembalikan') ? '#FDE68A' : '#BFDBFE'
-                          }}
-                        >
-                          {rx.status}
-                        </span>
-                      </div>
-                    </div>
-
-                    {rx.status === 'Dikembalikan ke Dokter' ? (
-                      <div style={{ background: '#FFFBEB', color: '#92400E', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.85rem' }}>
-                        Resep perlu diperbaiki oleh dokter sebelum dapat diproses apoteker.
+                    <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1E293B', margin: '0 0 12px' }}>Resep</h3>
+                    {rx.items && rx.items.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {rx.items.map((item, index) => (
+                          <div key={index} style={{ padding: '10px 12px', borderRadius: 8, background: '#F8FAFC' }}>
+                            <div style={{ fontWeight: 700, color: '#0F172A' }}>{item.medicineName}</div>
+                            <div style={{ marginTop: 4, color: '#475569', fontSize: '0.85rem' }}>
+                              Petunjuk konsumsi: {item.dosage}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     ) : (
-                    /* Progress tracking indicator */
-                    <div style={{ background: '#F8FAFC', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-around', fontSize: '0.78rem', color: '#475569' }}>
-                      <span style={{ fontWeight: 600, color: '#059669', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <CheckCircle2 size={14} /> 1. Diterima Farmasi
-                      </span>
-                      <span>&rarr;</span>
-                      <span style={{ fontWeight: 600, color: rx.status.includes('Diramu') || rx.status.includes('Selesai') ? '#059669' : '#94A3B8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        {rx.status.includes('Diramu') || rx.status.includes('Selesai') ? <CheckCircle2 size={14} /> : <Clock size={14} />} 2. Sedang Diramu Apoteker
-                      </span>
-                      <span>&rarr;</span>
-                      <span style={{ fontWeight: 600, color: rx.status.includes('Selesai') ? '#059669' : '#94A3B8', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        {rx.status.includes('Selesai') ? <CheckCircle2 size={14} /> : <Clock size={14} />} 3. Siap Diambil / Dikirim
-                      </span>
-                    </div>
-                    )}
-
-                    {/* Rincian Obat */}
-                    <div style={{ marginBottom: '12px' }}>
-                      <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
-                        Rincian Resep Obat:
+                      <div style={{ whiteSpace: 'pre-wrap', color: '#334155' }}>
+                        {rx.prescriptionText || 'Tidak ada rincian obat.'}
                       </div>
-                      {rx.items && rx.items.length > 0 ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          {rx.items.map((it, idx) => (
-                            <div key={idx} style={{ background: '#F1F5F9', padding: '8px 12px', borderRadius: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
-                              <strong>{it.medicineName} ({it.quantity})</strong>
-                              <span style={{ color: '#0F766E', fontStyle: 'italic' }}>{it.dosage}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div style={{ background: '#F8FAFC', padding: '10px', borderRadius: '6px', fontSize: '0.82rem', whiteSpace: 'pre-wrap' }}>
-                          {rx.prescriptionText}
-                        </div>
-                      )}
-                    </div>
-
-                    <div style={{ fontSize: '0.78rem', color: '#64748B', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #F8FAFC', paddingTop: '10px' }}>
-                      <span>Catatan Apoteker: <em>{rx.pharmacistNotes || 'Dalam proses penyiapan oleh apoteker klinik.'}</em></span>
-                      <span style={{ color: '#059669', fontWeight: 600 }}>Instalasi Farmasi TeleMed</span>
+                    )}
+                    <div style={{ borderTop: '1px solid #E2E8F0', marginTop: 12, paddingTop: 10, fontSize: '0.85rem', color: '#475569' }}>
+                      <strong>Catatan konsumsi:</strong> {rx.notes || 'Tidak ada catatan konsumsi.'}
                     </div>
                   </div>
                 ))}

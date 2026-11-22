@@ -1,15 +1,35 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { FileText, Printer, X, ShieldAlert, CheckCircle2, User, Stethoscope, Heart, Calendar } from 'lucide-react';
+import { FileText, Printer, X, ShieldAlert, CheckCircle2, User, Stethoscope, Heart, Calendar, Pencil } from 'lucide-react';
 
 export default function EMRDetailModal() {
-  const { viewingEMR, setViewingEMR, softDeleteEMR, restoreEMR, currentUser } = useApp();
+  const { viewingEMR, setViewingEMR, setEditingEMR, deleteEMR, restoreEMR, currentUser } = useApp();
 
   if (!viewingEMR) return null;
 
   const handlePrint = () => {
     window.print();
   };
+
+  const handleRestore = async () => {
+    if (await restoreEMR(viewingEMR.id)) {
+      setViewingEMR(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    const confirmed = window.confirm(
+      'Peringatan: rekam medis akan dihapus dan tidak dapat dipulihkan oleh dokter. Hanya admin yang dapat memulihkannya. Lanjutkan?'
+    );
+    if (!confirmed) return;
+    if (await deleteEMR(viewingEMR.id)) {
+      setViewingEMR(null);
+    }
+  };
+
+  const hasVitals = Object.values(viewingEMR.vitals || {}).some(
+    (value) => value !== null && value !== undefined && String(value).trim() !== ''
+  );
 
   return (
     <div className="modal-overlay">
@@ -23,7 +43,7 @@ export default function EMRDetailModal() {
               <span className="badge badge-primary">{viewingEMR.id}</span>
               {viewingEMR.isDeleted && (
                 <span className="badge badge-danger">
-                  <ShieldAlert size={12} /> Data Terhapus (Soft Delete)
+                  <ShieldAlert size={12} /> Data dihapus
                 </span>
               )}
             </div>
@@ -39,7 +59,7 @@ export default function EMRDetailModal() {
           </button>
         </div>
 
-        {/* Soft Delete Alert banner if soft-deleted */}
+        {/* Deleted record notice */}
         {viewingEMR.isDeleted && (
           <div 
             style={{ 
@@ -54,17 +74,14 @@ export default function EMRDetailModal() {
             }}
           >
             <div>
-              <strong>Perhatian:</strong> Rekam medis ini telah ditandai soft delete pada {viewingEMR.deletedAt}. 
+              <strong>Perhatian:</strong> Rekam medis ini telah dihapus pada {viewingEMR.deletedAt}.
               <br />
-              <span style={{ fontSize: '0.78rem' }}>Alasan/Pelaksana: {viewingEMR.deletedBy}</span>
+              <span style={{ fontSize: '0.78rem' }}>Alasan/Pelaksana: {viewingEMR.deletedBy}. Hanya admin yang dapat memulihkan data ini.</span>
             </div>
-            {currentUser.role !== 'pasien' && (
+            {currentUser.role === 'admin' && (
               <button
                 className="btn btn-sm btn-primary"
-                onClick={() => {
-                  restoreEMR(viewingEMR.id);
-                  setViewingEMR({ ...viewingEMR, isDeleted: false });
-                }}
+                onClick={handleRestore}
               >
                 Pulihkan Data
               </button>
@@ -112,24 +129,30 @@ export default function EMRDetailModal() {
                 <Heart size={16} color="#DC2626" />
                 <span>Tanda-Tanda Vital (Vitals)</span>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
-                <div style={{ background: '#FFF', border: '1px solid #E2E8F0', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.7rem', color: '#64748B' }}>Tekanan Darah</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1D4ED8' }}>{viewingEMR.vitals.bp || '120/80 mmHg'}</div>
+              {hasVitals ? (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+                  <div style={{ background: '#FFF', border: '1px solid #E2E8F0', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.7rem', color: '#64748B' }}>Tekanan Darah</div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1D4ED8' }}>{viewingEMR.vitals.bp || '—'}</div>
+                  </div>
+                  <div style={{ background: '#FFF', border: '1px solid #E2E8F0', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.7rem', color: '#64748B' }}>Denyut Nadi</div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700 }}>{viewingEMR.vitals.heartRate || '—'}</div>
+                  </div>
+                  <div style={{ background: '#FFF', border: '1px solid #E2E8F0', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.7rem', color: '#64748B' }}>Suhu Tubuh</div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700 }}>{viewingEMR.vitals.temperature || '—'}</div>
+                  </div>
+                  <div style={{ background: '#FFF', border: '1px solid #E2E8F0', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '0.7rem', color: '#64748B' }}>Berat Badan</div>
+                    <div style={{ fontSize: '0.95rem', fontWeight: 700 }}>{viewingEMR.vitals.weight || '—'}</div>
+                  </div>
                 </div>
-                <div style={{ background: '#FFF', border: '1px solid #E2E8F0', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.7rem', color: '#64748B' }}>Denyut Nadi</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700 }}>{viewingEMR.vitals.heartRate || '78 bpm'}</div>
-                </div>
-                <div style={{ background: '#FFF', border: '1px solid #E2E8F0', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.7rem', color: '#64748B' }}>Suhu Tubuh</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700 }}>{viewingEMR.vitals.temperature || '36.6 °C'}</div>
-                </div>
-                <div style={{ background: '#FFF', border: '1px solid #E2E8F0', padding: '10px', borderRadius: '8px', textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.7rem', color: '#64748B' }}>Berat Badan</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700 }}>{viewingEMR.vitals.weight || '70 kg'}</div>
-                </div>
-              </div>
+              ) : (
+                <p style={{ margin: 0, color: '#64748B', fontSize: '0.85rem' }}>
+                  Tanda vital belum dicatat.
+                </p>
+              )}
             </div>
           )}
 
@@ -184,16 +207,24 @@ export default function EMRDetailModal() {
         <div className="modal-footer">
           {currentUser.role === 'dokter' && !viewingEMR.isDeleted && (
             <button
-              className="btn btn-danger-outline btn-sm"
+              className="btn btn-outline btn-sm"
               onClick={() => {
-                const reason = prompt('Masukkan alasan soft delete rekam medis:', 'Koreksi penulisan oleh dokter pemeriksa');
-                if (reason) {
-                  softDeleteEMR(viewingEMR.id, reason);
-                  setViewingEMR(null);
-                }
+                setEditingEMR(viewingEMR);
+                setViewingEMR(null);
               }}
             >
-              Soft Delete Rekam Medis
+              <Pencil size={15} /> Edit Rekam Medis
+            </button>
+          )}
+
+          {currentUser.role === 'dokter' && !viewingEMR.isDeleted && (
+            <button
+              className="btn btn-danger-outline btn-sm"
+              onClick={() => {
+                handleDelete();
+              }}
+            >
+              Hapus Rekam Medis
             </button>
           )}
 

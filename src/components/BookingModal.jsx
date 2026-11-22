@@ -14,7 +14,13 @@ function getTodayLocalDate() {
 export default function BookingModal() {
   const { isBookingOpen, setIsBookingOpen, users, addAppointment, currentUser } = useApp();
 
-  const doctors = users.filter((u) => u.role === 'dokter');
+  const doctors = users.filter((u) => u.role === 'dokter' && u.status === 'Aktif');
+  const timeSlots = Array.from({ length: 17 }, (_, index) => {
+    const totalMinutes = 9 * 60 + index * 30;
+    const hour = String(Math.floor(totalMinutes / 60)).padStart(2, '0');
+    const minute = String(totalMinutes % 60).padStart(2, '0');
+    return `${hour}:${minute} WIB`;
+  });
   const todayStr = getTodayLocalDate();
 
   const [selectedDoctorId, setSelectedDoctorId] = useState(doctors[0]?.id || '');
@@ -22,6 +28,8 @@ export default function BookingModal() {
   const [time, setTime] = useState('13:30 WIB');
   const [type, setType] = useState('');
   const [complaint, setComplaint] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [bookingError, setBookingError] = useState('');
 
   useEffect(() => {
     if (isBookingOpen) {
@@ -43,8 +51,9 @@ export default function BookingModal() {
 
   if (!isBookingOpen) return null;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setBookingError('');
     if (!complaint.trim()) {
       alert('Harap tuliskan keluhan awal Anda.');
       return;
@@ -60,28 +69,34 @@ export default function BookingModal() {
       return;
     }
 
-    addAppointment({
-      doctorId: doctor.id,
-      doctorName: doctor.name,
-      specialty: doctor.specialty,
-      date,
-      time,
-      type,
-      complaint: complaint.trim(),
-      notes: `Pasien: ${currentUser.name}`
-    });
-
-    // Confetti celebration
+    setSubmitting(true);
     try {
-      confetti({
-        particleCount: 70,
-        spread: 60,
-        origin: { y: 0.6 }
+      await addAppointment({
+        doctorId: doctor.id,
+        doctorName: doctor.name,
+        specialty: doctor.specialty,
+        date,
+        time,
+        type,
+        complaint: complaint.trim(),
+        notes: `Pasien: ${currentUser.name}`
       });
-    } catch (err) {}
 
-    setIsBookingOpen(false);
-    setComplaint('');
+      try {
+        confetti({
+          particleCount: 70,
+          spread: 60,
+          origin: { y: 0.6 }
+        });
+      } catch (err) {}
+
+      setIsBookingOpen(false);
+      setComplaint('');
+    } catch (error) {
+      setBookingError(error.message || 'Jadwal konsultasi gagal dibuat.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const selectedDoctor = doctors.find((d) => d.id === selectedDoctorId) || doctors[0];
@@ -92,7 +107,7 @@ export default function BookingModal() {
         <div className="modal-header">
           <div>
             <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Buat Janji Konsultasi Dokter</h3>
-            <p style={{ fontSize: '0.82rem', color: '#64748B' }}>Pilih dokter spesialis dan waktu periksa secara online</p>
+            <p style={{ fontSize: '0.82rem', color: '#64748B' }}>Setiap konsultasi berlangsung 30 menit; konflik dokter dan pasien divalidasi saat pemesanan.</p>
           </div>
           <button
             onClick={() => setIsBookingOpen(false)}
@@ -104,6 +119,7 @@ export default function BookingModal() {
 
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
+            {bookingError && <div role="alert" style={{ color: '#B91C1C', background: '#FEF2F2', padding: 10, borderRadius: 8, marginBottom: 14 }}>{bookingError}</div>}
             {/* Select Doctor */}
             <div className="form-group">
               <label className="form-label">Pilih Dokter Spesialis</label>
@@ -164,12 +180,7 @@ export default function BookingModal() {
                   value={time}
                   onChange={(e) => setTime(e.target.value)}
                 >
-                  <option value="09:00 WIB">09:00 WIB (Pagi)</option>
-                  <option value="10:30 WIB">10:30 WIB (Pagi)</option>
-                  <option value="11:15 WIB">11:15 WIB (Siang)</option>
-                  <option value="13:30 WIB">13:30 WIB (Siang)</option>
-                  <option value="15:00 WIB">15:00 WIB (Sore)</option>
-                  <option value="19:00 WIB">19:00 WIB (Malam)</option>
+                  {timeSlots.map((slot) => <option key={slot} value={slot}>{slot}</option>)}
                 </select>
               </div>
             </div>
@@ -255,8 +266,8 @@ export default function BookingModal() {
             >
               Batal
             </button>
-            <button type="submit" className="btn btn-primary">
-              Konfirmasi Pemesanan
+            <button type="submit" className="btn btn-primary" disabled={submitting}>
+              {submitting ? 'Menyimpan…' : 'Konfirmasi Pemesanan'}
             </button>
           </div>
         </form>

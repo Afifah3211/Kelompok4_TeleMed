@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import DashboardMetric from '../components/DashboardMetric';
 import {
   ShieldCheck,
   Users,
+  UserCheck,
   FileSpreadsheet,
   Database,
+  Activity,
+  ArrowRight,
+  LayoutDashboard,
   Search,
   Filter,
   Download,
@@ -23,13 +28,19 @@ import {
   Play,
   RotateCcw,
   Clock,
-  Sparkles
+  Sparkles,
+  TrendingUp
 } from 'lucide-react';
 
 export default function AdminAuditLogs() {
   const {
     currentUser,
     users,
+    emrs,
+    deletedRecords,
+    restoreDeletedRecord,
+    appointments,
+    deleteUser,
     addUser,
     toggleUserStatus,
     auditLogs,
@@ -40,8 +51,9 @@ export default function AdminAuditLogs() {
     showToast
   } = useApp();
 
-  // Tabs: 'log-sistem' | 'kelola-dokter' | 'data-pasien' | 'backup-drp'
-  const [activeAdminTab, setActiveAdminTab] = useState('log-sistem');
+  // Tabs: 'dashboard' | 'log-sistem' | 'kelola-dokter' | 'data-pasien' | 'backup-drp' | 'rekam-medis'
+  const [activeAdminTab, setActiveAdminTab] = useState('dashboard');
+  const [dashboardRange, setDashboardRange] = useState(7);
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,6 +83,44 @@ export default function AdminAuditLogs() {
   // Filter lists
   const doctors = users.filter((u) => u.role === 'dokter');
   const patients = users.filter((u) => u.role === 'pasien');
+  const today = new Date();
+  const todayKey = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, '0'),
+    String(today.getDate()).padStart(2, '0'),
+  ].join('-');
+  const consultationTrend = Array.from({ length: dashboardRange }, (_, index) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - dashboardRange + index + 1);
+    const dateKey = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, '0'),
+      String(date.getDate()).padStart(2, '0'),
+    ].join('-');
+    return {
+      dateKey,
+      label: date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
+      count: appointments.filter((appointment) => appointment.date === dateKey).length,
+    };
+  });
+  const maxTrendCount = Math.max(1, ...consultationTrend.map((day) => day.count));
+  const todayConsultations = appointments.filter((appointment) => appointment.date === todayKey);
+  const ongoingConsultations = appointments.filter(
+    (appointment) => ['Menunggu', 'Sedang Berlangsung'].includes(appointment.status)
+  ).length;
+  const activeEMRs = emrs.filter((record) => !record.isDeleted);
+  const deletedTotal =
+    (deletedRecords.medical_records?.length || 0) +
+    (deletedRecords.consultations?.length || 0) +
+    (deletedRecords.users?.length || 0);
+  const recentAuditLogs = auditLogs.slice(0, 5);
+
+  const requestDeletionReason = (label) => {
+    if (!window.confirm(`Pindahkan ${label} ke data terhapus? Hanya admin yang dapat memulihkannya.`)) return null;
+    const reason = window.prompt('Alasan penghapusan:', 'Permintaan administrator');
+    return reason === null ? null : reason.trim() || 'Permintaan administrator';
+  };
 
   const filteredLogs = auditLogs.filter((log) => {
     const matchesSearch =
@@ -181,7 +231,7 @@ export default function AdminAuditLogs() {
           </div>
         </div>
 
-        {/* 4 Tabs Navigation */}
+        {/* 5 Tabs Navigation */}
         <div
           className="admin-dashboard-tabs"
           style={{
@@ -193,6 +243,26 @@ export default function AdminAuditLogs() {
             flexWrap: 'wrap'
           }}
         >
+          <button
+            onClick={() => setActiveAdminTab('dashboard')}
+            style={{
+              padding: '8px 14px',
+              borderRadius: '8px',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              background: activeAdminTab === 'dashboard' ? '#4F46E5' : 'transparent',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <LayoutDashboard size={16} />
+            <span>Dashboard</span>
+          </button>
+
           <button
             onClick={() => setActiveAdminTab('log-sistem')}
             style={{
@@ -273,8 +343,189 @@ export default function AdminAuditLogs() {
             <span>Sistem & backup</span>
           </button>
 
+          <button
+            onClick={() => setActiveAdminTab('rekam-medis')}
+            style={{
+              padding: '8px 14px',
+              borderRadius: '8px',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              background: activeAdminTab === 'rekam-medis' ? '#4F46E5' : 'transparent',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <FileSpreadsheet size={16} />
+            <span>Data terhapus</span>
+          </button>
+
         </div>
       </div>
+
+      {activeAdminTab === 'dashboard' && (
+        <div className="admin-overview">
+          <div className="dashboard-metrics">
+            <DashboardMetric
+              icon={Users}
+              label="Pasien terdaftar"
+              value={patients.length}
+              note="Buka pengelolaan pasien"
+              color="#2563EB"
+              onClick={() => setActiveAdminTab('data-pasien')}
+            />
+            <DashboardMetric
+              icon={UserCheck}
+              label="Dokter aktif"
+              value={doctors.filter((doctor) => doctor.status === 'Aktif').length}
+              note={`${doctors.length} dokter terdaftar`}
+              color="#0F766E"
+              onClick={() => setActiveAdminTab('kelola-dokter')}
+            />
+            <DashboardMetric
+              icon={Activity}
+              label="Konsultasi berjalan"
+              value={ongoingConsultations}
+              note={`${todayConsultations.length} terjadwal hari ini`}
+              color="#7C3AED"
+            />
+            <DashboardMetric
+              icon={FileSpreadsheet}
+              label="Rekam medis aktif"
+              value={activeEMRs.length}
+              note="Data yang dapat diakses"
+              color="#0891B2"
+            />
+            <DashboardMetric
+              icon={Trash2}
+              label="Item di data terhapus"
+              value={deletedTotal}
+              note="Khusus pemulihan admin"
+              color="#DC2626"
+              onClick={() => setActiveAdminTab('rekam-medis')}
+            />
+          </div>
+
+          <div className="dashboard-columns">
+            <section className="card dashboard-panel">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title"><TrendingUp size={19} color="#4F46E5" /> Aktivitas konsultasi</h2>
+                  <p className="dashboard-panel-note">Jumlah konsultasi terjadwal pada periode yang dipilih.</p>
+                </div>
+                <select
+                  className="form-select dashboard-range-select"
+                  aria-label="Periode grafik konsultasi"
+                  value={dashboardRange}
+                  onChange={(event) => setDashboardRange(Number(event.target.value))}
+                >
+                  <option value={7}>7 hari</option>
+                  <option value={14}>14 hari</option>
+                  <option value={30}>30 hari</option>
+                </select>
+              </div>
+              <div
+                className="dashboard-trend-chart"
+                role="img"
+                aria-label={`Grafik ${dashboardRange} hari konsultasi`}
+                style={{ gridTemplateColumns: `repeat(${dashboardRange}, minmax(0, 1fr))` }}
+              >
+                {consultationTrend.map((day, index) => {
+                  const showLabel = dashboardRange === 7 ||
+                    index % Math.ceil(dashboardRange / 7) === 0 ||
+                    index === dashboardRange - 1;
+                  const barHeight = day.count
+                    ? Math.max(10, (day.count / maxTrendCount) * 100)
+                    : 4;
+                  return (
+                    <div className="dashboard-trend-column" key={day.dateKey} title={`${day.label}: ${day.count} konsultasi`}>
+                      <span className="dashboard-trend-value">{day.count || ''}</span>
+                      <div className="dashboard-trend-track">
+                        <div className="dashboard-trend-bar" style={{ height: `${barHeight}%` }} />
+                      </div>
+                      <span className="dashboard-trend-label">{showLabel ? day.label : ''}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+
+            <section className="card dashboard-panel">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title"><Activity size={19} color="#0F766E" /> Status konsultasi</h2>
+                  <p className="dashboard-panel-note">{appointments.length} konsultasi aktif dalam sistem.</p>
+                </div>
+              </div>
+              <div className="dashboard-status-list">
+                {['Menunggu', 'Sedang Berlangsung', 'Selesai', 'Dibatalkan'].map((status) => {
+                  const count = appointments.filter((appointment) => appointment.status === status).length;
+                  const percentage = appointments.length ? (count / appointments.length) * 100 : 0;
+                  return (
+                    <div className="dashboard-status-row" key={status}>
+                      <div className="dashboard-status-label"><span>{status}</span><strong>{count}</strong></div>
+                      <div className="dashboard-status-track"><div style={{ width: `${percentage}%` }} /></div>
+                    </div>
+                  );
+                })}
+              </div>
+              <button type="button" className="btn btn-outline btn-sm dashboard-panel-action" onClick={() => setActiveAdminTab('rekam-medis')}>
+                Buka data terhapus <ArrowRight size={15} />
+              </button>
+            </section>
+          </div>
+
+          <div className="dashboard-columns">
+            <section className="card dashboard-panel">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title"><FileSpreadsheet size={19} color="#2563EB" /> Aktivitas terbaru</h2>
+                  <p className="dashboard-panel-note">Perubahan terbaru yang tercatat pada audit log.</p>
+                </div>
+                <button type="button" className="btn btn-outline btn-sm" onClick={() => setActiveAdminTab('log-sistem')}>
+                  Semua audit log
+                </button>
+              </div>
+              {recentAuditLogs.length === 0 ? (
+                <p className="dashboard-empty">Belum ada aktivitas tercatat.</p>
+              ) : (
+                <div className="dashboard-activity-list">
+                  {recentAuditLogs.map((log) => (
+                    <div className="dashboard-activity-item" key={log.id}>
+                      <span className={`dashboard-activity-dot ${log.action === 'DELETE' ? 'is-danger' : ''}`} />
+                      <div className="dashboard-activity-copy">
+                        <strong>{log.action} · {log.tableName}</strong>
+                        <span>{log.userName} · {log.timestamp}</span>
+                      </div>
+                      <small>#{log.dataId}</small>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="card dashboard-panel dashboard-backup-panel">
+              <div className="card-header">
+                <div>
+                  <h2 className="card-title"><Database size={19} color="#7C3AED" /> Kesiapan sistem</h2>
+                  <p className="dashboard-panel-note">Ringkasan pencadangan dan pemulihan.</p>
+                </div>
+              </div>
+              <div className="dashboard-backup-status">
+                <span className="dashboard-backup-check"><CheckCircle2 size={18} /></span>
+                <div><strong>{backupConfig.policyName}</strong><span>Target RTO {backupConfig.rtoTarget} · RPO {backupConfig.rpoTarget}</span></div>
+              </div>
+              <p className="dashboard-backup-date">Pencadangan terakhir: {backupConfig.lastBackup}</p>
+              <button type="button" className="btn btn-outline btn-sm dashboard-panel-action" onClick={() => setActiveAdminTab('backup-drp')}>
+                Buka sistem & backup <ArrowRight size={15} />
+              </button>
+            </section>
+          </div>
+        </div>
+      )}
 
       {/* TAB 1: LOG AUDIT SISTEM */}
       {activeAdminTab === 'log-sistem' && (
@@ -476,7 +727,6 @@ export default function AdminAuditLogs() {
                   <th>Spesialisasi</th>
                   <th>Nomor SIP / STR</th>
                   <th>Rumah Sakit / Klinik Mitra</th>
-                  <th>Tarif Konsultasi</th>
                   <th>Status Akun</th>
                   <th style={{ textAlign: 'right' }}>Aksi</th>
                 </tr>
@@ -501,22 +751,33 @@ export default function AdminAuditLogs() {
                       <span className="badge badge-accent">{doc.specialty || 'Dokter Umum'}</span>
                     </td>
                     <td>
-                      <code>{doc.sip || '446/STR/2026'}</code>
+                      <code>{doc.sip || '-'}</code>
                     </td>
-                    <td>{doc.hospital || 'RS Medika TeleMed'}</td>
-                    <td><strong>{doc.fee || 'Rp 150.000'}</strong></td>
+                    <td>{doc.hospital || '-'}</td>
                     <td>
                       <span className={`badge ${doc.status === 'Aktif' ? 'badge-selesai' : 'badge-danger'}`}>
                         {doc.status === 'Aktif' ? '● Aktif' : '○ Nonaktif'}
                       </span>
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      <button
-                        className="btn btn-outline btn-sm"
-                        onClick={() => toggleUserStatus(doc.userId || doc.id)}
-                      >
-                        {doc.status === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan'}
-                      </button>
+                      <div style={{ display: 'inline-flex', gap: 6 }}>
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={() => toggleUserStatus(doc.userId || doc.id)}
+                        >
+                          {doc.status === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan'}
+                        </button>
+                        <button
+                          className="btn btn-danger-outline btn-sm"
+                          onClick={async () => {
+                            const reason = requestDeletionReason(`akun dokter ${doc.name}`);
+                            if (reason !== null) await deleteUser(doc.userId, reason);
+                          }}
+                          title="Hapus sementara akun dokter"
+                        >
+                          <Trash2 size={14} /> Hapus
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -596,18 +857,93 @@ export default function AdminAuditLogs() {
                       </span>
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      <button
-                        className="btn btn-outline btn-sm"
-                        onClick={() => toggleUserStatus(p.userId || p.id)}
-                      >
-                        {p.status === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan'}
-                      </button>
+                      <div style={{ display: 'inline-flex', gap: 6 }}>
+                        <button
+                          className="btn btn-outline btn-sm"
+                          onClick={() => toggleUserStatus(p.userId || p.id)}
+                        >
+                          {p.status === 'Aktif' ? 'Nonaktifkan' : 'Aktifkan'}
+                        </button>
+                        <button
+                          className="btn btn-danger-outline btn-sm"
+                          onClick={async () => {
+                            const reason = requestDeletionReason(`akun pasien ${p.name}`);
+                            if (reason !== null) await deleteUser(p.userId, reason);
+                          }}
+                          title="Hapus sementara akun pasien"
+                        >
+                          <Trash2 size={14} /> Hapus
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {activeAdminTab === 'rekam-medis' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <section className="card">
+            <div className="card-header">
+              <div>
+                <h2 className="card-title"><Trash2 size={20} color="#DC2626" /> Rekam medis terhapus</h2>
+                <p style={{ fontSize: '0.82rem', color: '#64748B', marginTop: 4 }}>Hanya admin yang dapat memulihkan rekam medis.</p>
+              </div>
+            </div>
+            <div className="table-container">
+              <table className="data-table">
+                <thead><tr><th>ID</th><th>Pasien</th><th>Diagnosis</th><th>Dokter</th><th>Dihapus pada</th><th>Aksi</th></tr></thead>
+                <tbody>
+                  {(deletedRecords.medical_records || []).map((record) => (
+                    <tr key={record.id}>
+                      <td>{record.id}</td><td>{record.patient_name}</td><td>{record.diagnosis || '-'}</td><td>{record.doctor_name}</td><td>{record.deleted_at || '-'}</td>
+                      <td><button className="btn btn-primary btn-sm" onClick={() => restoreDeletedRecord('medical-record', record.id)}><RotateCcw size={14} /> Pulihkan</button></td>
+                    </tr>
+                  ))}
+                  {(deletedRecords.medical_records || []).length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', color: '#64748B', padding: 20 }}>Tidak ada rekam medis terhapus.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="card">
+            <div className="card-header"><h2 className="card-title"><Calendar size={20} color="#DC2626" /> Konsultasi terhapus</h2></div>
+            <div className="table-container">
+              <table className="data-table">
+                <thead><tr><th>ID</th><th>Jadwal</th><th>Pasien</th><th>Dokter</th><th>Alasan</th><th>Aksi</th></tr></thead>
+                <tbody>
+                  {(deletedRecords.consultations || []).map((record) => (
+                    <tr key={record.id}>
+                      <td>{record.id}</td><td>{record.scheduled_at}</td><td>{record.patient_name}</td><td>{record.doctor_name}</td><td>{record.delete_reason || '-'}</td>
+                      <td><button className="btn btn-primary btn-sm" onClick={() => restoreDeletedRecord('consultation', record.id)}><RotateCcw size={14} /> Pulihkan</button></td>
+                    </tr>
+                  ))}
+                  {(deletedRecords.consultations || []).length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', color: '#64748B', padding: 20 }}>Tidak ada konsultasi terhapus.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="card">
+            <div className="card-header"><h2 className="card-title"><Users size={20} color="#DC2626" /> Akun pasien dan dokter terhapus</h2></div>
+            <div className="table-container">
+              <table className="data-table">
+                <thead><tr><th>ID</th><th>Nama</th><th>Email</th><th>Role</th><th>Alasan</th><th>Aksi</th></tr></thead>
+                <tbody>
+                  {(deletedRecords.users || []).map((record) => (
+                    <tr key={record.id}>
+                      <td>{record.id}</td><td>{record.full_name}</td><td>{record.username}</td><td>{record.role}</td><td>{record.delete_reason || '-'}</td>
+                      <td><button className="btn btn-primary btn-sm" onClick={() => restoreDeletedRecord('user', record.id)}><RotateCcw size={14} /> Pulihkan</button></td>
+                    </tr>
+                  ))}
+                  {(deletedRecords.users || []).length === 0 && <tr><td colSpan="6" style={{ textAlign: 'center', color: '#64748B', padding: 20 }}>Tidak ada akun terhapus.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
       )}
 

@@ -9,7 +9,6 @@ import {
   Lock, 
   ArrowRight, 
   Stethoscope, 
-  Pill, 
   CheckCircle2,
   ArrowLeft
 } from 'lucide-react';
@@ -147,7 +146,7 @@ export default function AuthView() {
           </div>
 
           <div className="auth-left-footer">
-            <span>&copy; TeleMed Enterprise Healthcare Systems</span>
+            <span>&copy; MediSync Healthcare Systems</span>
           </div>
         </div>
 
@@ -403,13 +402,6 @@ export default function AuthView() {
                     onClick={() => handleFillDemo('admin@medisync.id', 'Admin IT')}
                   >
                     <ShieldCheck size={13} /> Admin: admin@medisync.id
-                  </button>
-                  <button 
-                    type="button" 
-                    className="quick-role-btn btn-apoteker"
-                    onClick={() => handleFillDemo('apoteker@medisync.id', 'Apoteker (apt. Dewi)')}
-                  >
-                    <Pill size={13} /> Apoteker: apoteker@medisync.id
                   </button>
                 </div>
               </div>

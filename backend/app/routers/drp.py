@@ -76,10 +76,8 @@ async def get_drp_status(
                 (SELECT COUNT(*) FROM users) AS users,
                 (SELECT COUNT(*) FROM patients) AS patients,
                 (SELECT COUNT(*) FROM doctors) AS doctors,
-                (SELECT COUNT(*) FROM pharmacists) AS pharmacists,
                 (SELECT COUNT(*) FROM consultations) AS consultations,
                 (SELECT COUNT(*) FROM medical_records) AS medical_records,
-                (SELECT COUNT(*) FROM medicines) AS medicines,
                 (SELECT COUNT(*) FROM prescriptions) AS prescriptions,
                 (SELECT COUNT(*) FROM prescription_items) AS prescription_items,
                 (SELECT COUNT(*) FROM audit_logs) AS audit_logs;
@@ -92,10 +90,8 @@ async def get_drp_status(
                 (SELECT COUNT(*) FROM users) AS users,
                 (SELECT COUNT(*) FROM patients) AS patients,
                 (SELECT COUNT(*) FROM doctors) AS doctors,
-                (SELECT COUNT(*) FROM pharmacists) AS pharmacists,
                 (SELECT COUNT(*) FROM consultations) AS consultations,
                 NULL AS medical_records,
-                (SELECT COUNT(*) FROM medicines) AS medicines,
                 (SELECT COUNT(*) FROM prescriptions) AS prescriptions,
                 (SELECT COUNT(*) FROM prescription_items) AS prescription_items,
                 (SELECT COUNT(*) FROM audit_logs) AS audit_logs;

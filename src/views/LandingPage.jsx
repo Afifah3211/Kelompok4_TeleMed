@@ -32,7 +32,7 @@ const services = [
     icon: <Pill size={23} />,
     className: 'icon-emerald',
     title: 'Resep Digital',
-    description: 'Akses resep dan informasi status penyiapan obat setelah konsultasi.',
+    description: 'Akses resep yang diterbitkan dokter setelah konsultasi.',
   },
 ];
 
@@ -73,12 +73,22 @@ export default function LandingPage() {
             <div className="health-illustration-orbit orbit-outer" />
             <div className="health-illustration-orbit orbit-inner" />
             <div className="health-illustration-glow" />
+            <svg className="health-circuit" viewBox="0 0 470 420" focusable="false">
+              <path className="health-circuit-trace" d="M22 112h78l24 24h48M370 88h-58l-22 22h-38M26 286h69l23-23h40M444 278h-65l-25-25h-48M70 54v44l18 18M404 346v-48l-20-20" />
+              <path className="health-circuit-signal" d="M22 112h78l24 24h48M370 88h-58l-22 22h-38M26 286h69l23-23h40M444 278h-65l-25-25h-48M70 54v44l18 18M404 346v-48l-20-20" />
+              <circle className="health-circuit-node" cx="22" cy="112" r="4" />
+              <circle className="health-circuit-node" cx="370" cy="88" r="4" />
+              <circle className="health-circuit-node" cx="26" cy="286" r="4" />
+              <circle className="health-circuit-node" cx="444" cy="278" r="4" />
+              <circle className="health-circuit-node" cx="70" cy="54" r="4" />
+              <circle className="health-circuit-node" cx="404" cy="346" r="4" />
+            </svg>
             <div className="health-illustration-icon"><Stethoscope size={108} strokeWidth={1.35} /></div>
             <div className="health-illustration-pulse"><Activity size={44} strokeWidth={1.7} /></div>
             <div className="health-illustration-plus plus-one">+</div>
             <div className="health-illustration-plus plus-two">+</div>
-            <div className="health-illustration-caption">TeleMed</div>
-            </div>
+            <div className="health-illustration-caption">MediSync</div>
+          </div>
         </div>
       </section>
 
@@ -114,7 +124,7 @@ export default function LandingPage() {
           <div className="members-grid">
             <div className="member-card care-step-card">
               <div className="member-avatar" style={{ background: '#DBEAFE', color: '#1D4ED8' }}>1</div>
-              <div className="member-info"><strong>Buat akun pasien</strong><span>Daftar untuk mengakses layanan TeleMed.</span></div>
+              <div className="member-info"><strong>Buat akun pasien</strong><span>Daftar untuk mengakses layanan MediSync.</span></div>
             </div>
             <div className="member-card care-step-card">
               <div className="member-avatar" style={{ background: '#CCFBF1', color: '#0F766E' }}>2</div>
@@ -122,7 +132,7 @@ export default function LandingPage() {
             </div>
             <div className="member-card care-step-card">
               <div className="member-avatar" style={{ background: '#DCFCE7', color: '#15803D' }}>3</div>
-              <div className="member-info"><strong>Konsultasi dan tindak lanjut</strong><span>Baca hasil pemeriksaan, resep, dan status obat.</span></div>
+              <div className="member-info"><strong>Konsultasi dan tindak lanjut</strong><span>Baca hasil pemeriksaan, resep, dan anjuran dokter.</span></div>
             </div>
           </div>
         </div>

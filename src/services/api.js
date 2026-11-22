@@ -1,5 +1,5 @@
 ﻿/**
- * TeleMed - API Client (Frontend -> FastAPI Backend)
+ * MediSync - API Client (Frontend -> FastAPI Backend)
  * Menghubungkan React frontend ke FastAPI REST API backend dengan JWT Bearer Auth.
  * Token disimpan di sessionStorage (bukan localStorage).
  * Tidak ada data medis/pengguna di storage browser.
@@ -145,10 +145,23 @@ export const usersApi = {
       method: 'POST',
       body: patientData,
     }),
-  updateProfile: (profileData) =>
-    apiFetch('/users/profile', {
+  updateProfile: (id, profileData) =>
+    apiFetch(`/users/${id}`, {
       method: 'PUT',
       body: profileData,
+    }),
+  uploadProfilePhoto: (id, image) => {
+    const body = new FormData();
+    body.append('image', image);
+    return apiFetch(`/users/${id}/profile-photo`, {
+      method: 'POST',
+      body,
+    });
+  },
+  delete: (id, reason) =>
+    apiFetch(`/users/${id}`, {
+      method: 'DELETE',
+      body: { reason },
     }),
   toggleStatus: (id) =>
     apiFetch(`/users/${id}/toggle-status`, {
@@ -181,6 +194,19 @@ export const consultationsApi = {
       method: 'PATCH',
       body: { status },
     }),
+  delete: (id, reason) =>
+    apiFetch(`/consultations/${id}`, {
+      method: 'DELETE',
+      body: { reason },
+    }),
+};
+
+export const adminRecoveryApi = {
+  getDeleted: () => apiFetch('/admin/recovery'),
+  restore: (entity, id) =>
+    apiFetch(`/admin/recovery/${entity}/${id}`, {
+      method: 'PATCH',
+    }),
 };
 
 // =========================================
@@ -204,7 +230,12 @@ export const medicalRecordsApi = {
       method: 'POST',
       body: data,
     }),
-  softDelete: (id, reason = 'Koreksi rekam medis oleh dokter') =>
+  update: (id, data) =>
+    apiFetch(`/medical-records/${id}`, {
+      method: 'PUT',
+      body: data,
+    }),
+  delete: (id, reason = 'Dihapus oleh dokter pemeriksa') =>
     apiFetch(`/medical-records/${id}`, {
       method: 'DELETE',
       body: { reason },
@@ -284,30 +315,10 @@ export const drpApi = {
 };
 
 // =========================================
-// MEDICINES API (Obat Farmasi)
-// =========================================
-export const medicinesApi = {
-  getAll: () => apiFetch('/medicines'),
-  update: (id, data) =>
-    apiFetch(`/medicines/${id}`, {
-      method: 'PUT',
-      body: data,
-    }),
-};
-
-// =========================================
-// PRESCRIPTIONS API (Resep Digital)
+// PRESCRIPTIONS API
 // =========================================
 export const prescriptionsApi = {
   getAll: () => apiFetch('/prescriptions'),
-  updateStatus: (id, { status, pharmacistNotes, pharmacist_notes }) =>
-    apiFetch(`/prescriptions/${id}/status`, {
-      method: 'PATCH',
-      body: {
-        status,
-        pharmacist_notes: pharmacist_notes || pharmacistNotes || null,
-      },
-    }),
 };
 
 // =========================================
@@ -325,6 +336,32 @@ export const chatApi = {
       body: formData,
     });
   },
+};
+
+// =========================================
+// VIDEO CALL SIGNALING (WebRTC SDP/ICE)
+// =========================================
+export const videoApi = {
+  joinSession: (consultationId) =>
+    apiFetch(`/video/consultations/${consultationId}/join`, {
+      method: 'POST',
+    }),
+  getSignals: (consultationId, sessionId, afterId = 0) => {
+    const query = new URLSearchParams({
+      session_id: sessionId,
+      after_id: String(afterId),
+    }).toString();
+    return apiFetch(`/video/consultations/${consultationId}/signals?${query}`);
+  },
+  sendSignal: (consultationId, sessionId, signalType, payload = {}) =>
+    apiFetch(`/video/consultations/${consultationId}/signals`, {
+      method: 'POST',
+      body: {
+        session_id: sessionId,
+        signal_type: signalType,
+        payload,
+      },
+    }),
 };
 // Health check
 export const healthCheck = () => apiFetch('/health');

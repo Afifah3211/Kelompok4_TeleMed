@@ -35,7 +35,7 @@ async def seed_data():
             await cur.execute("SELECT pg_advisory_lock(42);")
 
             try:
-                # ── 1. USERS, PATIENTS, DOCTORS, PHARMACISTS ──────────────
+                # ── 1. USERS, PATIENTS, DOCTORS ───────────────────────────
                 pwd_hash = await hash_password(settings.SEED_PASSWORD)
 
                 users_data = [
@@ -45,7 +45,6 @@ async def seed_data():
                     (4, "dr.sarah@medisync.id", pwd_hash, "dokter", True),
                     (5, "dr.bintang@medisync.id", pwd_hash, "dokter", True),
                     (6, "admin@medisync.id", pwd_hash, "admin", True),
-                    (7, "apoteker@medisync.id", pwd_hash, "apoteker", True),
                 ]
                 await cur.executemany(
                     """
@@ -92,18 +91,7 @@ async def seed_data():
                     doctors_data,
                 )
 
-                pharmacists_data = [
-                    (1, 7, "apt. Dewi Sartika, S.Farm", "19950512/SIPA-3273/2022", "Instalasi Farmasi TeleMed"),
-                ]
-                await cur.executemany(
-                    """
-                    INSERT INTO pharmacists (id, user_id, full_name, sipa_number, workplace)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (id) DO NOTHING;
-                    """,
-                    pharmacists_data,
-                )
-                logger.info("[Seed] OK [1/7] users, patients, doctors, pharmacists")
+                logger.info("[Seed] OK [1/7] users, patients, doctors")
 
                 # ── 2. CONSULTATIONS (6) ──────────────────────────────────
                 consultations_data = [
@@ -256,14 +244,12 @@ async def seed_data():
                         1, 1, 1, 1, 1,
                         "Selesai / Sudah Diambil",
                         "Pasien diinformasikan kontrol tensi 2 minggu lagi.",
-                        "Telah diserahkan kepada pasien oleh apt. Dewi Sartika, S.Farm.",
                         "2026-10-12 09:50:00+07"
                     ),
                     (
                         2, 2, 2, 2, 1,
                         "Sedang Diramu",
                         "Hindari makanan pedas dan kopi.",
-                        "Sedang disiapkan etiket pemakaian oleh apoteker.",
                         "2026-10-19 10:40:00+07"
                     ),
                 ]
@@ -271,8 +257,8 @@ async def seed_data():
                     """
                     INSERT INTO prescriptions (
                         id, medical_record_id, consultation_id, patient_id, doctor_id,
-                        status, notes, pharmacist_notes, created_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        status, notes, created_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (id) DO NOTHING;
                     """,
                     rx_data,
@@ -353,7 +339,6 @@ async def seed_data():
                     ("users_id_seq", "users"),
                     ("patients_id_seq", "patients"),
                     ("doctors_id_seq", "doctors"),
-                    ("pharmacists_id_seq", "pharmacists"),
                     ("consultations_id_seq", "consultations"),
                     ("medical_records_id_seq", "medical_records"),
                     ("medicines_id_seq", "medicines"),

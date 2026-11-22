@@ -665,12 +665,6 @@ h1, h2, h3, h4, h5, h6 {
   border-color: #C7D2FE;
 }
 
-.tag-apoteker {
-  background: #ECFDF5;
-  color: #059669;
-  border-color: #A7F3D0;
-}
-
 /* ==========================================================================
    AUTH VIEW (SPLIT SCREEN MATCHING USER SCREENSHOT)
    ========================================================================== */
@@ -941,8 +935,6 @@ h1, h2, h3, h4, h5, h6 {
 .btn-pasien { color: #1D4ED8; border-color: #BFDBFE; background: #EFF6FF; }
 .btn-dokter { color: #0F766E; border-color: #99F6E4; background: #F0FDFA; }
 .btn-admin { color: #4F46E5; border-color: #C7D2FE; background: #EEF2FF; }
-.btn-apoteker { color: #059669; border-color: #A7F3D0; background: #ECFDF5; }
-
 /* Responsive Auth */
 @media (max-width: 900px) {
   .auth-split-wrapper {
@@ -1019,6 +1011,7 @@ h1, h2, h3, h4, h5, h6 {
   height: 420px;
   place-items: center;
   overflow: hidden;
+  perspective: 900px;
   border-radius: 46% 54% 52% 48% / 46% 45% 55% 54%;
   background: linear-gradient(145deg, #EAF3FF 0%, #F3FAFF 48%, #E2F7F3 100%);
 }
@@ -1049,6 +1042,45 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 22px 55px rgba(37, 99, 235, 0.12);
 }
 
+.health-circuit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.health-circuit-trace,
+.health-circuit-signal {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.health-circuit-trace {
+  stroke: rgba(37, 99, 235, 0.2);
+  stroke-width: 2;
+}
+
+.health-circuit-signal {
+  stroke: #0F8B82;
+  stroke-width: 2.5;
+  stroke-dasharray: 8 250;
+  stroke-dashoffset: 0;
+  filter: drop-shadow(0 0 4px rgba(15, 139, 130, 0.72));
+  animation: circuit-signal-flow 5s linear infinite;
+}
+
+.health-circuit-node {
+  fill: #FFFFFF;
+  stroke: #0F8B82;
+  stroke-width: 2;
+}
+
+@keyframes circuit-signal-flow {
+  to { stroke-dashoffset: -516; }
+}
+
 .health-illustration-icon {
   position: relative;
   z-index: 1;
@@ -1060,7 +1092,26 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.82);
   color: #1769AA;
-  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.1);
+  box-shadow: 12px 20px 34px rgba(15, 23, 42, 0.16), inset 5px 5px 14px rgba(255, 255, 255, 0.95);
+  transform-style: preserve-3d;
+  animation: stethoscope-float 5s ease-in-out infinite;
+}
+
+.health-illustration-icon svg {
+  filter: drop-shadow(5px 7px 2px rgba(15, 63, 107, 0.22));
+  transform: translateZ(22px) rotateY(-12deg) rotateX(7deg);
+}
+
+@keyframes stethoscope-float {
+  0%, 100% { transform: translateY(0) rotateX(5deg) rotateY(-10deg) rotateZ(-3deg); }
+  50% { transform: translateY(-11px) rotateX(-3deg) rotateY(10deg) rotateZ(3deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .health-illustration-icon,
+  .health-circuit-signal {
+    animation: none;
+  }
 }
 
 .health-illustration-pulse {
@@ -1679,16 +1730,370 @@ h1, h2, h3, h4, h5, h6 {
   gap: 6px;
 }
 
-/* ==========================================================================
-   PHARMACIST DASHBOARD
-   ========================================================================== */
-.pharmacist-dashboard-container {
+/* Consistent, compact dashboards across the clinical roles. */
+.admin-overview,
+.doctor-dashboard {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
 }
 
-/* Consistent, compact dashboards across the clinical roles. */
+.dashboard-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(165px, 1fr));
+  gap: 12px;
+}
+
+.dashboard-metric {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 112px;
+  padding: 16px;
+  border: 1px solid #E2E8F0;
+  border-radius: 14px;
+  background: #FFFFFF;
+  color: #0F172A;
+  text-align: left;
+  font: inherit;
+}
+
+.dashboard-metric.is-actionable {
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.dashboard-metric.is-actionable:hover {
+  border-color: #93C5FD;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.07);
+  transform: translateY(-1px);
+}
+
+.dashboard-metric-icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+}
+
+.dashboard-metric-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dashboard-metric-label,
+.dashboard-metric-note {
+  overflow: hidden;
+  color: #64748B;
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-metric-value {
+  color: #0F172A;
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+.dashboard-metric-arrow {
+  flex: 0 0 auto;
+  margin: 3px 0 0 auto;
+  color: #94A3B8;
+}
+
+.dashboard-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.dashboard-panel {
+  min-width: 0;
+  padding: 20px;
+}
+
+.dashboard-panel-note {
+  margin: 4px 0 0;
+  color: #64748B;
+  font-size: 0.78rem;
+}
+
+.dashboard-range-select {
+  width: auto;
+  min-width: 90px;
+}
+
+.dashboard-trend-chart {
+  display: grid;
+  height: 180px;
+  align-items: end;
+  gap: 4px;
+  margin-top: 20px;
+  padding: 10px 4px 0;
+}
+
+.dashboard-trend-column {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.dashboard-trend-value,
+.dashboard-trend-label {
+  overflow: hidden;
+  max-width: 100%;
+  color: #64748B;
+  font-size: 0.67rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-trend-track {
+  display: flex;
+  width: min(100%, 24px);
+  min-height: 0;
+  flex: 1;
+  align-items: flex-end;
+  overflow: hidden;
+  border-radius: 7px 7px 3px 3px;
+  background: #F1F5F9;
+}
+
+.dashboard-trend-bar {
+  width: 100%;
+  min-height: 3px;
+  border-radius: 7px 7px 3px 3px;
+  background: linear-gradient(180deg, #38BDF8, #2563EB);
+  transition: height 0.2s ease;
+}
+
+.dashboard-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 20px 0;
+}
+
+.dashboard-status-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+  color: #475569;
+  font-size: 0.8rem;
+}
+
+.dashboard-status-track {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #F1F5F9;
+}
+
+.dashboard-status-track > div {
+  height: 100%;
+  border-radius: inherit;
+  background: #0F766E;
+}
+
+.dashboard-panel-action {
+  margin-top: 4px;
+}
+
+.dashboard-empty {
+  color: #64748B;
+  font-size: 0.86rem;
+}
+
+.dashboard-activity-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-activity-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.dashboard-activity-item:last-child {
+  border-bottom: 0;
+}
+
+.dashboard-activity-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #0F766E;
+}
+
+.dashboard-activity-dot.is-danger {
+  background: #DC2626;
+}
+
+.dashboard-activity-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dashboard-activity-copy strong {
+  overflow: hidden;
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-activity-copy span,
+.dashboard-activity-item small {
+  color: #64748B;
+  font-size: 0.73rem;
+}
+
+.dashboard-backup-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 10px;
+}
+
+.dashboard-backup-check {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: #DCFCE7;
+  color: #15803D;
+}
+
+.dashboard-backup-status > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dashboard-backup-status strong {
+  font-size: 0.84rem;
+}
+
+.dashboard-backup-status span:not(.dashboard-backup-check),
+.dashboard-backup-date {
+  color: #64748B;
+  font-size: 0.76rem;
+}
+
+.doctor-dashboard-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px;
+  border: 1px solid #CCFBF1;
+  border-radius: 14px;
+  background: linear-gradient(110deg, #F0FDFA, #EFF6FF);
+}
+
+.doctor-dashboard-heading h2 {
+  margin: 0;
+  color: #0F172A;
+  font-size: 1.18rem;
+}
+
+.doctor-dashboard-heading p {
+  margin: 5px 0 0;
+  color: #64748B;
+  font-size: 0.82rem;
+  text-transform: capitalize;
+}
+
+.doctor-dashboard-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.doctor-dashboard-list-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid #F1F5F9;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.doctor-dashboard-list-item:last-child {
+  border-bottom: 0;
+}
+
+.doctor-dashboard-list-item:hover .doctor-dashboard-list-copy strong {
+  color: #0F766E;
+}
+
+.doctor-dashboard-list-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  background: #F0FDFA;
+  color: #0F766E;
+}
+
+.doctor-dashboard-list-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.doctor-dashboard-list-copy strong {
+  overflow: hidden;
+  font-size: 0.83rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doctor-dashboard-list-copy span,
+.doctor-dashboard-status {
+  color: #64748B;
+  font-size: 0.73rem;
+}
+
+.doctor-dashboard-empty {
+  margin: 12px 0 4px;
+  color: #64748B;
+  font-size: 0.85rem;
+}
+
+.doctor-dashboard-records {
+  grid-column: 1 / -1;
+}
+
 .doctor-workspace {
   grid-template-columns: minmax(290px, 360px) minmax(0, 1fr) !important;
   gap: 18px !important;
@@ -1718,28 +2123,18 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 0.88rem;
 }
 
-.pharma-tab-nav {
-  max-width: 100%;
-}
-
-.pharma-nav-btn {
-  white-space: nowrap;
-}
-
 @media (max-width: 900px) {
   .doctor-workspace,
   .patient-dashboard-layout,
-  .pharma-content-split {
+  .dashboard-columns {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
-  .pharma-banner {
-    align-items: flex-start;
-  }
-
-  .pharma-stats-row {
-    width: 100%;
-    flex-wrap: wrap;
+  .doctor-queue-sticky,
+  .patient-dashboard-layout > aside {
+    position: static;
+    max-height: none;
+    overflow: visible;
   }
 
   .admin-dashboard-banner {
@@ -1752,20 +2147,22 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 @media (max-width: 600px) {
-  .doctor-emr-root,
-  .pharmacist-dashboard-container {
+  .doctor-emr-root {
     gap: 14px !important;
   }
 
-  .pharma-tab-nav {
-    width: 100%;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .doctor-dashboard-heading {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
-  .pharma-nav-btn {
+  .doctor-dashboard-heading .btn {
+    width: 100%;
     justify-content: center;
-    padding: 9px 10px;
+  }
+
+  .dashboard-panel {
+    padding: 16px;
   }
 
   .doctor-no-appointments {
@@ -1784,131 +2181,15 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
-.pharma-banner {
-  background: linear-gradient(135deg, #064E3B 0%, #065F46 100%);
-  color: #FFFFFF;
-  border-radius: 16px;
-  padding: 24px 28px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-
-.pharma-banner .banner-icon-circle {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.18);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.banner-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.banner-title {
-  font-size: 1.35rem;
-  font-weight: 800;
-  color: #FFFFFF;
-}
-
-.banner-sub {
-  font-size: 0.85rem;
-  color: #A7F3D0;
-  margin-top: 2px;
-}
-
-.pharma-stats-row {
-  display: flex;
-  gap: 12px;
-}
-
-.p-stat-card {
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 10px;
-  padding: 10px 16px;
-  text-align: center;
-}
-
-.p-stat-num {
-  font-size: 1.35rem;
-  font-weight: 800;
-  display: block;
-}
-
-.p-stat-lbl {
-  font-size: 0.72rem;
-  color: #D1FAE5;
-}
-
-.pharma-tab-nav {
-  display: flex;
-  gap: 10px;
-  background: #FFFFFF;
-  padding: 6px;
-  border-radius: 12px;
-  border: 1px solid #E2E8F0;
-  width: fit-content;
-}
-
-.pharma-nav-btn {
-  padding: 8px 18px;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: #64748B;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.15s ease;
-}
-
-.pharma-nav-btn.active {
-  background: #059669;
-  color: #FFFFFF;
-}
-
-.rx-correction-warning {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 18px;
-  padding: 14px 16px;
-  border: 1px solid #FCD34D;
-  border-radius: 12px;
-  background: #FFFBEB;
-  color: #92400E;
-}
-
-.rx-correction-warning p {
-  margin: 4px 0 0;
-  font-size: 0.85rem;
-  line-height: 1.5;
-}
-
-.pharma-content-split {
-  display: grid;
-  grid-template-columns: 380px 1fr;
-  gap: 20px;
-  align-items: start;
-}
-
-.pharma-list-col {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
-  border-radius: 16px;
-  padding: 20px;
+@media (min-width: 901px) {
+  .doctor-queue-sticky,
+  .patient-dashboard-layout > aside {
+    position: sticky;
+    top: 88px;
+    max-height: calc(100vh - 104px);
+    overflow-y: auto;
+    align-self: start;
+  }
 }
 
 .filter-bar {
@@ -1925,10 +2206,6 @@ h1, h2, h3, h4, h5, h6 {
 .filter-chips {
   display: flex;
   gap: 4px;
-}
-
-.pharmacist-queue-toolbar {
-  align-items: center;
 }
 
 .queue-view-switch {
@@ -2031,13 +2308,6 @@ h1, h2, h3, h4, h5, h6 {
   gap: 4px;
 }
 
-.pharma-detail-col {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
-  border-radius: 16px;
-  padding: 24px;
-}
-
 .rx-detail-header {
   display: flex;
   justify-content: space-between;
@@ -2096,12 +2366,6 @@ h1, h2, h3, h4, h5, h6 {
   border-bottom: 1px solid #F1F5F9;
 }
 
-.pharmacist-workflow-actions {
-  margin-top: 24px;
-  padding-top: 18px;
-  border-top: 1px solid #E2E8F0;
-}
-
 .workflow-buttons {
   display: flex;
   gap: 12px;
@@ -2128,13 +2392,6 @@ h1, h2, h3, h4, h5, h6 {
   color: #047857;
   font-size: 0.84rem;
   font-weight: 600;
-}
-
-.pharma-inventory-view {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
-  border-radius: 16px;
-  padding: 24px;
 }
 
 .inventory-top-bar {
@@ -2350,5 +2607,28 @@ h1, h2, h3, h4, h5, h6 {
   background: #EFF6FF;
   color: #1D4ED8;
   border: 1px solid #BFDBFE;
+}
+
+.teleconsultation-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+.teleconsultation-body.has-video-chat {
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.9fr);
+}
+
+.teleconsultation-body.has-video-chat > div {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .teleconsultation-body.has-video-chat {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(300px, 1fr) minmax(280px, 1fr);
+    overflow-y: auto;
+  }
 }
 

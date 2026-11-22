@@ -1,0 +1,17 @@
+.git
+.env
+.env.*
+node_modules
+dist
+backend
+postgres
+offsite
+backup
+recovery
+secrets
+disk
+main
+k6
+scripts
+*.log
+*.pdf

@@ -7,10 +7,10 @@ import ResetPasswordView from './views/ResetPasswordView';
 import PatientDashboard from './views/PatientDashboard';
 import DoctorEMR from './views/DoctorEMR';
 import AdminAuditLogs from './views/AdminAuditLogs';
-import PharmacistDashboard from './views/PharmacistDashboard';
 import TeleconsultationModal from './components/TeleconsultationModal';
 import BookingModal from './components/BookingModal';
 import EMRDetailModal from './components/EMRDetailModal';
+import EMREditModal from './components/EMREditModal';
 import Toast from './components/Toast';
 
 export default function App() {
@@ -32,7 +32,6 @@ export default function App() {
             {currentUser.role === 'pasien' && <PatientDashboard />}
             {currentUser.role === 'dokter' && <DoctorEMR />}
             {currentUser.role === 'admin' && <AdminAuditLogs />}
-            {currentUser.role === 'apoteker' && <PharmacistDashboard />}
           </>
         )}
 
@@ -45,6 +44,7 @@ export default function App() {
       <TeleconsultationModal />
       <BookingModal />
       <EMRDetailModal />
+      <EMREditModal />
       <Toast />
 
       {/* Footer */}
@@ -70,7 +70,7 @@ export default function App() {
           }}
         >
           <div>
-          <strong>TeleMed</strong> • Layanan konsultasi kesehatan online
+          <strong>MediSync</strong> • Layanan konsultasi kesehatan online
           </div>
         </div>
       </footer>

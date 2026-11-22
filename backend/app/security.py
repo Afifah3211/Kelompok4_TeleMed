@@ -101,7 +101,7 @@ async def get_current_user(
         )
 
     user = await fetch_one(
-        "SELECT id, username, role, is_active FROM users WHERE id = %s",
+        "SELECT id, username, role, is_active, is_deleted FROM users WHERE id = %s",
         (user_id,),
     )
     if not user:
@@ -116,6 +116,16 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Akun pengguna dinonaktifkan",
         )
+    if user["is_deleted"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Akun telah dihapus. Hubungi administrator untuk pemulihan",
+        )
+    if user["role"] not in {"admin", "dokter", "pasien"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Role akun ini tidak lagi didukung",
+        )
 
     pid = payload.get("pid")
     if pid is None:
@@ -128,11 +138,6 @@ async def get_current_user(
             d = await fetch_one("SELECT id FROM doctors WHERE user_id = %s", (user_id,))
             if d:
                 pid = d["id"]
-        elif role == "apoteker":
-            ph = await fetch_one("SELECT id FROM pharmacists WHERE user_id = %s", (user_id,))
-            if ph:
-                pid = ph["id"]
-
     user["pid"] = pid
     return user
 

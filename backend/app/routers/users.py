@@ -1,10 +1,14 @@
 from datetime import date
+import logging
 from typing import Any, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+import uuid
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from pydantic import BaseModel
 
 from app.audit import audit
+from app.config import settings
 from app.db import execute, fetch_all, fetch_one, transaction
+from app.routers.files import _ensure_bucket, _profile_photo_url, _s3_client
 from app.normalization import normalize_gender
 from app.security import (
     get_current_user,
@@ -13,6 +17,30 @@ from app.security import (
 )
 
 router = APIRouter()
+logger = logging.getLogger("telemed.users")
+PROFILE_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+}
+MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
+
+
+async def ensure_profile_recovery_schema():
+    """Apply additive columns needed by existing database volumes."""
+    await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;")
+    await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;")
+    await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_by VARCHAR(150);")
+    await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS delete_reason TEXT;")
+    await execute("ALTER TABLE patients ADD COLUMN IF NOT EXISTS profile_photo_key VARCHAR(512);")
+    await execute("ALTER TABLE doctors ADD COLUMN IF NOT EXISTS phone VARCHAR(30);")
+    await execute("ALTER TABLE doctors ADD COLUMN IF NOT EXISTS workplace VARCHAR(150);")
+    await execute("ALTER TABLE doctors ADD COLUMN IF NOT EXISTS profile_photo_key VARCHAR(512);")
+    await execute("ALTER TABLE consultations ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;")
+    await execute("ALTER TABLE consultations ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;")
+    await execute("ALTER TABLE consultations ADD COLUMN IF NOT EXISTS deleted_by VARCHAR(150);")
+    await execute("ALTER TABLE consultations ADD COLUMN IF NOT EXISTS delete_reason TEXT;")
+    await execute("CREATE INDEX IF NOT EXISTS idx_consult_deleted ON consultations(is_deleted);")
 
 
 class CreateDoctorRequest(BaseModel):
@@ -21,6 +49,8 @@ class CreateDoctorRequest(BaseModel):
     fullName: str
     specialization: Optional[str] = None
     strNumber: Optional[str] = None
+    phone: Optional[str] = None
+    workplace: Optional[str] = None
 
 
 class CreatePatientRequest(BaseModel):
@@ -51,17 +81,41 @@ class UpdateProfileRequest(BaseModel):
     workplace: Optional[str] = None
 
 
+class DeleteUserRequest(BaseModel):
+    reason: str = "Dihapus oleh administrator"
+
+
+def _profile_row(row: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    if row is None:
+        return None
+    photo_key = row.pop("profile_photo_key", None)
+    row["profile_photo_url"] = _profile_photo_url(photo_key) if photo_key else None
+    return row
+
+
+def _image_matches_content_type(data: bytes, content_type: str) -> bool:
+    if content_type == "image/jpeg":
+        return data.startswith(b"\xff\xd8\xff")
+    if content_type == "image/png":
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
+    if content_type == "image/webp":
+        return len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    return False
+
+
 @router.get("")
 async def list_users(
     role: Optional[str] = Query(None),
     current_user: dict[str, Any] = Depends(require_roles("admin")),
 ):
     """List semua user (khusus admin, tanpa password_hash)."""
+    if role and role not in {"admin", "dokter", "pasien"}:
+        raise HTTPException(status_code=400, detail="Role tidak valid")
     if role:
-        query = "SELECT id, username, role, is_active, created_at FROM users WHERE role = %s ORDER BY id ASC;"
+        query = "SELECT id, username, role, is_active, created_at FROM users WHERE role = %s AND is_deleted = FALSE ORDER BY id ASC;"
         rows = await fetch_all(query, (role,))
     else:
-        query = "SELECT id, username, role, is_active, created_at FROM users ORDER BY id ASC;"
+        query = "SELECT id, username, role, is_active, created_at FROM users WHERE is_deleted = FALSE AND role IN ('admin','dokter','pasien') ORDER BY id ASC;"
         rows = await fetch_all(query)
     return rows
 
@@ -73,30 +127,31 @@ async def list_doctors(
     """List semua dokter beserta profil (dapat diakses oleh semua role yang login)."""
     query = """
         SELECT u.id AS user_id, u.username, u.is_active, u.created_at,
-               d.id, d.full_name, d.specialization, d.str_number
+               d.id, d.full_name, d.specialization, d.str_number, d.phone,
+               d.workplace, d.profile_photo_key
         FROM users u
         JOIN doctors d ON d.user_id = u.id
-        WHERE u.role = 'dokter'
+        WHERE u.role = 'dokter' AND u.is_deleted = FALSE
         ORDER BY d.full_name ASC;
     """
-    return await fetch_all(query)
+    return [_profile_row(row) for row in await fetch_all(query)]
 
 
 @router.get("/patients")
 async def list_patients(
-    current_user: dict[str, Any] = Depends(require_roles("admin", "dokter", "apoteker")),
+    current_user: dict[str, Any] = Depends(require_roles("admin", "dokter")),
 ):
-    """List semua pasien beserta profil (khusus dokter, admin, dan apoteker)."""
+    """List semua pasien beserta profil (khusus dokter dan admin)."""
     query = """
         SELECT u.id AS user_id, u.username, u.is_active, u.created_at,
                p.id, p.nik, p.full_name, p.birth_date, p.gender, p.phone, p.address,
-               p.blood_type, p.allergies
+               p.blood_type, p.allergies, p.profile_photo_key
         FROM users u
         JOIN patients p ON p.user_id = u.id
-        WHERE u.role = 'pasien'
+        WHERE u.role = 'pasien' AND u.is_deleted = FALSE
         ORDER BY p.full_name ASC;
     """
-    return await fetch_all(query)
+    return [_profile_row(row) for row in await fetch_all(query)]
 
 
 @router.post("/doctor", status_code=status.HTTP_201_CREATED)
@@ -144,15 +199,17 @@ async def create_doctor(
 
             await cur.execute(
                 """
-                INSERT INTO doctors (user_id, full_name, specialization, str_number)
-                VALUES (%s, %s, %s, %s)
-                RETURNING id, user_id, full_name, specialization, str_number;
+                INSERT INTO doctors (user_id, full_name, specialization, str_number, phone, workplace)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, user_id, full_name, specialization, str_number, phone, workplace;
                 """,
                 (
                     user_id,
                     full_name,
                     req.specialization.strip() if req.specialization else None,
                     req.strNumber.strip() if req.strNumber else None,
+                    req.phone.strip() if req.phone else None,
+                    req.workplace.strip() if req.workplace else None,
                 ),
             )
             doctor_row = await cur.fetchone()
@@ -262,7 +319,7 @@ async def toggle_user_active(
     current_user: dict[str, Any] = Depends(require_roles("admin")),
 ):
     """Admin mengaktifkan atau menonaktifkan akun user."""
-    user = await fetch_one("SELECT id, username, role, is_active FROM users WHERE id = %s", (id,))
+    user = await fetch_one("SELECT id, username, role, is_active FROM users WHERE id = %s AND is_deleted = FALSE", (id,))
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -304,7 +361,7 @@ async def update_user_profile(
             detail="Tidak memiliki izin untuk mengubah profil pengguna lain",
         )
 
-    user = await fetch_one("SELECT id, username, role FROM users WHERE id = %s", (id,))
+    user = await fetch_one("SELECT id, username, role FROM users WHERE id = %s AND is_deleted = FALSE", (id,))
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -351,32 +408,22 @@ async def update_user_profile(
             UPDATE doctors
             SET full_name = COALESCE(%s, full_name),
                 specialization = COALESCE(%s, specialization),
-                str_number = COALESCE(%s, str_number)
+                str_number = COALESCE(%s, str_number),
+                phone = COALESCE(%s, phone),
+                workplace = COALESCE(%s, workplace)
             WHERE user_id = %s;
             """,
             (
                 req.fullName.strip() if req.fullName else None,
                 req.specialization.strip() if req.specialization else None,
                 req.strNumber.strip() if req.strNumber else None,
-                id,
-            ),
-        )
-    elif role == "apoteker":
-        await execute(
-            """
-            UPDATE pharmacists
-            SET full_name = COALESCE(%s, full_name),
-                sipa_number = COALESCE(%s, sipa_number),
-                workplace = COALESCE(%s, workplace)
-            WHERE user_id = %s;
-            """,
-            (
-                req.fullName.strip() if req.fullName else None,
-                req.sipaNumber.strip() if req.sipaNumber else None,
+                req.phone.strip() if req.phone else None,
                 req.workplace.strip() if req.workplace else None,
                 id,
             ),
         )
+    else:
+        raise HTTPException(status_code=403, detail="Profil role ini tidak dapat diperbarui")
 
     await audit(
         request=request,
@@ -389,3 +436,131 @@ async def update_user_profile(
     )
 
     return {"message": "Profil berhasil diperbarui"}
+
+
+@router.post("/{id}/profile-photo")
+async def upload_profile_photo(
+    id: int,
+    request: Request,
+    image: UploadFile = File(...),
+    current_user: dict[str, Any] = Depends(get_current_user),
+):
+    if current_user["role"] not in {"pasien", "dokter"}:
+        raise HTTPException(status_code=403, detail="Role ini tidak memiliki profil foto")
+    if current_user["role"] != "admin" and current_user["id"] != id:
+        raise HTTPException(status_code=403, detail="Tidak memiliki izin untuk mengubah foto pengguna lain")
+
+    content_type = (image.content_type or "").lower()
+    extension = PROFILE_IMAGE_TYPES.get(content_type)
+    if not extension:
+        raise HTTPException(status_code=415, detail="Foto profil hanya menerima JPG, PNG, atau WebP")
+
+    data = await image.read(MAX_PROFILE_IMAGE_BYTES + 1)
+    if not data:
+        raise HTTPException(status_code=400, detail="File foto kosong")
+    if len(data) > MAX_PROFILE_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Ukuran foto profil maksimal 5 MB")
+    if not _image_matches_content_type(data, content_type):
+        raise HTTPException(status_code=415, detail="Isi file tidak sesuai dengan format gambar")
+
+    user = await fetch_one(
+        "SELECT id, role FROM users WHERE id = %s AND is_deleted = FALSE",
+        (id,),
+    )
+    if not user or user["role"] not in {"pasien", "dokter"}:
+        raise HTTPException(status_code=404, detail="Profil pengguna tidak ditemukan")
+
+    profile_table = "patients" if user["role"] == "pasien" else "doctors"
+    previous = await fetch_one(
+        f"SELECT profile_photo_key FROM {profile_table} WHERE user_id = %s",
+        (id,),
+    )
+    if not previous:
+        raise HTTPException(status_code=404, detail="Profil pengguna tidak ditemukan")
+
+    object_key = f"profile/{id}/{uuid.uuid4().hex}{extension}"
+    try:
+        s3 = _s3_client()
+        _ensure_bucket(s3)
+        s3.put_object(
+            Bucket=settings.MINIO_BUCKET,
+            Key=object_key,
+            Body=data,
+            ContentType=content_type,
+        )
+    except Exception as exc:
+        logger.exception("Gagal menyimpan foto profil user_id=%s", id)
+        raise HTTPException(status_code=503, detail="Gagal menyimpan foto profil ke object storage") from exc
+
+    try:
+        await execute(
+            f"UPDATE {profile_table} SET profile_photo_key = %s WHERE user_id = %s",
+            (object_key, id),
+        )
+    except Exception:
+        try:
+            s3.delete_object(
+                Bucket=settings.MINIO_BUCKET,
+                Key=object_key,
+            )
+        except Exception:
+            logger.exception("Gagal membersihkan foto profil yang tidak tersimpan, key=%s", object_key)
+        raise
+
+    await audit(
+        request=request,
+        user=current_user,
+        action="UPDATE",
+        table=profile_table,
+        record_id=id,
+        severity="info",
+        details=f"Foto profil akun {user['role']} ID={id} diperbarui.",
+    )
+
+    if previous.get("profile_photo_key"):
+        try:
+            s3.delete_object(
+                Bucket=settings.MINIO_BUCKET,
+                Key=previous["profile_photo_key"],
+            )
+        except Exception:
+            logger.exception("Gagal menghapus foto profil lama, key=%s", previous["profile_photo_key"])
+
+    return {"profile_photo_url": _profile_photo_url(object_key)}
+
+
+@router.delete("/{id}")
+async def delete_user(
+    id: int,
+    req: DeleteUserRequest,
+    request: Request,
+    current_user: dict[str, Any] = Depends(require_roles("admin")),
+):
+    user = await fetch_one(
+        "SELECT id, username, role FROM users WHERE id = %s AND is_deleted = FALSE",
+        (id,),
+    )
+    if not user or user["role"] not in {"pasien", "dokter"}:
+        raise HTTPException(status_code=404, detail="Akun pasien atau dokter tidak ditemukan")
+
+    reason = req.reason.strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="Alasan penghapusan wajib diisi")
+    await execute(
+        """
+        UPDATE users
+        SET is_deleted = TRUE, deleted_at = NOW(), deleted_by = %s, delete_reason = %s
+        WHERE id = %s;
+        """,
+        (current_user["username"], reason, id),
+    )
+    await audit(
+        request=request,
+        user=current_user,
+        action="DELETE",
+        table="users",
+        record_id=id,
+        severity="warning",
+        details=f"Akun {user['role']} '{user['username']}' dihapus sementara. Alasan: {reason}.",
+    )
+    return {"message": "Akun berhasil dipindahkan ke pemulihan admin"}

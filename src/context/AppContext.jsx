@@ -8,8 +8,8 @@ import {
   auditLogsApi, 
   backupApi, 
   drpApi, 
-  medicinesApi, 
   prescriptionsApi,
+  adminRecoveryApi,
   getToken,
   setToken,
   clearToken
@@ -17,19 +17,7 @@ import {
 
 const AppContext = createContext();
 
-// Helper untuk membuat avatar default yang menarik berdasarkan role/nama
-function getDefaultAvatar(role, name) {
-  if (role === 'dokter') {
-    return 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=150&q=80';
-  }
-  if (role === 'admin') {
-    return 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80';
-  }
-  if (role === 'apoteker') {
-    return 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=150&q=80';
-  }
-  return 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80';
-}
+const DEFAULT_AVATAR = '/avatar-placeholder.svg';
 
 // Normalisasi objek user & profile dari backend
 function buildCurrentUser(user, profile) {
@@ -54,15 +42,15 @@ function buildCurrentUser(user, profile) {
     specialization: p.specialization || '',
     specialty: p.specialization || (role === 'dokter' ? 'Dokter Spesialis' : ''),
     strNumber: p.str_number || '',
-    sip: p.str_number || '446/MED/2026',
-    sipaNumber: p.sipa_number || '',
-    sipa: p.sipa_number || '19950512/SIPA-3273/2022',
-    workplace: p.workplace || 'RS / Klinik TeleMed',
-    avatar: getDefaultAvatar(role, p.full_name || user.username),
-    status: user.is_active ? 'Aktif' : 'Nonaktif',
+    sip: p.str_number || '',
+    sipaNumber: '',
+    sipa: '',
+    workplace: p.workplace || '',
+    avatar: p.profile_photo_url || DEFAULT_AVATAR,
+    profilePhotoUrl: p.profile_photo_url || '',
+    status: user.is_active === false ? 'Nonaktif' : 'Aktif',
     patientId: role === 'pasien' ? p.id : null,
     doctorId: role === 'dokter' ? p.id : null,
-    pharmacistId: role === 'apoteker' ? p.id : null,
   };
 }
 
@@ -112,6 +100,7 @@ function normalizeEMR(e) {
   return {
     ...e,
     id: e.id,
+    consultationId: e.consultation_id,
     patientId: e.patient_id,
     patientName: e.patient_name || 'Pasien',
     patientNik: e.patient_nik || '',
@@ -145,20 +134,18 @@ function normalizePrescription(p) {
   const dateStr = `${created.getFullYear()}-${String(created.getMonth() + 1).padStart(2, '0')}-${String(created.getDate()).padStart(2, '0')}`;
 
   return {
-    ...p,
     id: p.id,
+    medicalRecordId: p.medical_record_id,
     patientId: p.patient_id,
     patientName: p.patient_name || 'Pasien',
     doctorId: p.doctor_id,
     doctorName: p.doctor_name || 'Dokter',
-    status: p.status,
     notes: p.notes || '',
-    pharmacistNotes: p.pharmacist_notes || '',
     date: dateStr,
-    prescriptionText: p.notes || '',
+    prescriptionText: p.prescription_text || '',
     items: (p.items || []).map((it) => ({
       medicineId: it.medicine_id,
-      medicineName: it.medicine_name,
+      medicineName: it.medicine_name || '',
       quantity: it.quantity,
       dosage: it.dosage,
     })),
@@ -197,6 +184,7 @@ export function AppProvider({ children }) {
   const [users, setUsers] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [emrs, setEmrs] = useState([]);
+  const [deletedRecords, setDeletedRecords] = useState({ medical_records: [], consultations: [], users: [] });
   const [auditLogs, setAuditLogs] = useState([]);
   const [backupConfig, setBackupConfig] = useState({
     policyName: '3-2-1 Backup & Cloud Disaster Recovery Plan',
@@ -210,13 +198,13 @@ export function AppProvider({ children }) {
       { type: 'Off-site Cloud Replica S3 AES-256', copy: 'Copy 3 (Off-site Cloud)', status: 'Terverifikasi (Aman)', path: 's3://telemed-cold-archive', size: '25.1 MB' }
     ]
   });
-  const [medicines, setMedicines] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
 
   // Modal states
   const [teleconsultationSession, setTeleconsultationSession] = useState(null);
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [viewingEMR, setViewingEMR] = useState(null);
+  const [editingEMR, setEditingEMR] = useState(null);
 
   // Toast notifications
   const [toasts, setToasts] = useState([]);
@@ -237,6 +225,104 @@ export function AppProvider({ children }) {
     return normalized;
   }, []);
 
+  const refreshAppointments = useCallback(async () => {
+    const appointmentList = await consultationsApi.getAll();
+    const normalized = (appointmentList || []).map(normalizeConsultation);
+    setAppointments(normalized);
+    setTeleconsultationSession((current) => {
+      if (!current) return current;
+      return normalized.find((appointment) => Number(appointment.id) === Number(current.id)) || current;
+    });
+    return normalized;
+  }, []);
+
+  const refreshUsers = useCallback(async () => {
+    const role = currentUser?.role;
+    if (!['pasien', 'dokter', 'admin'].includes(role)) return [];
+    const doctorRequest = usersApi.getDoctors();
+    const patientRequest = role === 'dokter' || role === 'admin'
+      ? usersApi.getPatients()
+      : Promise.resolve([]);
+    const [doctorRows, patientRows] = await Promise.all([doctorRequest, patientRequest]);
+    const doctorUsers = (doctorRows || []).map((doctor) => ({
+      id: doctor.id,
+      userId: doctor.user_id,
+      name: doctor.full_name,
+      email: doctor.username,
+      role: 'dokter',
+      specialty: doctor.specialization || 'Dokter Spesialis',
+      sip: doctor.str_number || '',
+      phone: doctor.phone || '',
+      hospital: doctor.workplace || '',
+      avatar: doctor.profile_photo_url || DEFAULT_AVATAR,
+      status: doctor.is_active ? 'Aktif' : 'Nonaktif',
+    }));
+    const patientUsers = (patientRows || []).map((patient) => ({
+      id: patient.id,
+      userId: patient.user_id,
+      name: patient.full_name,
+      email: patient.username,
+      role: 'pasien',
+      nik: patient.nik || '-',
+      phone: patient.phone || '-',
+      birthDate: patient.birth_date || '',
+      gender: patient.gender === 'L' ? 'Laki-laki' : patient.gender === 'P' ? 'Perempuan' : '-',
+      address: patient.address || '-',
+      bloodType: patient.blood_type || '-',
+      allergies: patient.allergies || '-',
+      avatar: patient.profile_photo_url || DEFAULT_AVATAR,
+      status: patient.is_active ? 'Aktif' : 'Nonaktif',
+    }));
+    const combined = [...doctorUsers, ...patientUsers];
+    setUsers(combined);
+    return combined;
+  }, [currentUser?.role]);
+
+  const refreshDeletedRecords = useCallback(async () => {
+    if (currentUser?.role !== 'admin') return null;
+    const deleted = await adminRecoveryApi.getDeleted();
+    setDeletedRecords(deleted);
+    return deleted;
+  }, [currentUser?.role]);
+
+  const refreshEMRs = useCallback(async () => {
+    const role = currentUser?.role;
+    if (!['pasien', 'dokter', 'admin'].includes(role)) return [];
+    const recordList = await medicalRecordsApi.getAll({
+      include_deleted: role === 'admin',
+    });
+    const normalized = (recordList || []).map(normalizeEMR);
+    setEmrs(normalized);
+    setViewingEMR((current) => {
+      if (!current) return current;
+      return normalized.find((record) => Number(record.id) === Number(current.id)) || null;
+    });
+    setEditingEMR((current) => {
+      if (!current) return current;
+      return normalized.find((record) => Number(record.id) === Number(current.id)) || null;
+    });
+    return normalized;
+  }, [currentUser?.role]);
+
+  useEffect(() => {
+    if (!currentUser) return undefined;
+    const role = currentUser.role;
+    const timer = window.setInterval(() => {
+      refreshPrescriptions().catch((error) => console.warn('Gagal memperbarui antrean resep:', error));
+      if (['pasien', 'dokter', 'admin'].includes(role)) {
+        refreshAppointments().catch((error) => console.warn('Gagal memperbarui konsultasi:', error));
+        refreshEMRs().catch((error) => console.warn('Gagal memperbarui rekam medis:', error));
+      }
+      if (role === 'admin') {
+        refreshDeletedRecords().catch((error) => console.warn('Gagal memperbarui data pemulihan:', error));
+      }
+      if (['pasien', 'dokter', 'admin'].includes(role)) {
+        refreshUsers().catch((error) => console.warn('Gagal memperbarui direktori pengguna:', error));
+      }
+    }, 15000);
+    return () => window.clearInterval(timer);
+  }, [currentUser, refreshAppointments, refreshDeletedRecords, refreshEMRs, refreshPrescriptions, refreshUsers]);
+
   // Memuat data role-specific dari FastAPI backend
   const loadInitialData = useCallback(async (role) => {
     try {
@@ -250,8 +336,11 @@ export function AppProvider({ children }) {
           role: 'dokter',
           specialty: d.specialization || 'Dokter Spesialis',
           sip: d.str_number || '446/MED/2026',
-          avatar: getDefaultAvatar('dokter', d.full_name),
+          avatar: d.profile_photo_url || DEFAULT_AVATAR,
           status: d.is_active ? 'Aktif' : 'Nonaktif',
+          email: d.username,
+          phone: d.phone || '',
+          hospital: d.workplace || '',
         }));
         setUsers((prev) => {
           const others = prev.filter((u) => u.role !== 'dokter');
@@ -274,7 +363,7 @@ export function AppProvider({ children }) {
           address: p.address || '-',
           bloodType: p.blood_type || '-',
           allergies: p.allergies || '-',
-          avatar: getDefaultAvatar('pasien', p.full_name),
+          avatar: p.profile_photo_url || DEFAULT_AVATAR,
           status: p.is_active ? 'Aktif' : 'Nonaktif',
         }));
         setUsers((prev) => {
@@ -291,22 +380,18 @@ export function AppProvider({ children }) {
 
       // 4. Rekam Medis / EMR (pasien, dokter, admin)
       if (role === 'pasien' || role === 'dokter' || role === 'admin') {
-        const includeDeleted = role === 'dokter' || role === 'admin';
+        const includeDeleted = role === 'admin';
         const emrList = await medicalRecordsApi.getAll({ include_deleted: includeDeleted });
         setEmrs((emrList || []).map(normalizeEMR));
       }
 
-      // 5. Obat Farmasi (dokter, admin, apoteker)
-      if (role === 'dokter' || role === 'admin' || role === 'apoteker') {
-        const medList = await medicinesApi.getAll();
-        setMedicines(medList || []);
-      }
-
-      // 6. Resep Digital (pasien, dokter, admin, apoteker)
+      // 5. Resep digital
       await refreshPrescriptions();
 
-      // 7. Audit Logs & Backup (khusus admin)
+      // 6. Audit Logs & Backup (khusus admin)
       if (role === 'admin') {
+        await refreshDeletedRecords();
+        await refreshUsers();
         const logs = await auditLogsApi.getAll({ limit: 100 });
         setAuditLogs((logs || []).map(normalizeAuditLog));
 
@@ -339,7 +424,7 @@ export function AppProvider({ children }) {
     } catch (err) {
       console.warn('Error loading initial data from backend:', err);
     }
-  }, [refreshPrescriptions]);
+  }, [refreshDeletedRecords, refreshPrescriptions, refreshUsers]);
 
   // Inisialisasi Auth pada mount dengan token dari sessionStorage
   useEffect(() => {
@@ -489,8 +574,9 @@ export function AppProvider({ children }) {
     setCurrentPage('landing');
     setAppointments([]);
     setEmrs([]);
+    setUsers([]);
+    setDeletedRecords({ medical_records: [], consultations: [], users: [] });
     setAuditLogs([]);
-    setMedicines([]);
     setPrescriptions([]);
     showToast('Anda telah berhasil keluar (Logout).', 'info');
   };
@@ -506,7 +592,6 @@ export function AppProvider({ children }) {
       pasien: { username: 'budi@email.com', password: 'medisync2026' },
       dokter: { username: 'dr.andi@medisync.id', password: 'medisync2026' },
       admin: { username: 'admin@medisync.id', password: 'medisync2026' },
-      apoteker: { username: 'apoteker@medisync.id', password: 'medisync2026' },
     };
 
     const target = demoUsers[role];
@@ -534,7 +619,7 @@ export function AppProvider({ children }) {
 
       const normalized = normalizeConsultation(created);
       setAppointments((prev) => [normalized, ...prev]);
-      showToast(`Janji temu #${created.id} berhasil dibuat! Menunggu konfirmasi dokter.`, 'success');
+      showToast(`Janji temu #${created.id} berhasil dibuat. Menunggu dokter memulai konsultasi.`, 'success');
       return normalized;
     } catch (err) {
       showToast(err.message || 'Gagal membuat jadwal konsultasi.', 'danger');
@@ -543,14 +628,16 @@ export function AppProvider({ children }) {
   };
 
   // Doctor confirms appointment / update status
-  const confirmAppointment = async (id, newStatus = 'Dikonfirmasi') => {
+  const confirmAppointment = async (id, newStatus = 'Sedang Berlangsung') => {
     try {
       const updated = await consultationsApi.updateStatus(id, newStatus);
       const normalized = normalizeConsultation(updated);
-      setAppointments((prev) => prev.map((a) => (a.id === id ? normalized : a)));
+      setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, ...normalized } : a)));
       showToast(`Status konsultasi #${id} diubah ke: ${newStatus}`, 'success');
+      return normalized;
     } catch (err) {
       showToast(err.message || 'Gagal mengubah status konsultasi.', 'danger');
+      return null;
     }
   };
 
@@ -558,10 +645,15 @@ export function AppProvider({ children }) {
     try {
       const updated = await consultationsApi.updateStatus(id, newStatus);
       const normalized = normalizeConsultation(updated);
-      setAppointments((prev) => prev.map((a) => (a.id === id ? normalized : a)));
+      setAppointments((prev) => prev.map((a) => (a.id === id ? { ...a, ...normalized } : a)));
+      setTeleconsultationSession((current) =>
+        current && Number(current.id) === Number(id) ? { ...current, ...normalized } : current
+      );
       showToast(`Status konsultasi #${id} diperbarui: ${newStatus}`, 'info');
+      return normalized;
     } catch (err) {
       showToast(err.message || 'Gagal memperbarui status konsultasi.', 'danger');
+      return null;
     }
   };
 
@@ -609,7 +701,7 @@ export function AppProvider({ children }) {
 
       showToast(
         recordRes.prescription_id
-          ? `Rekam Medis #${recordRes.id} tersimpan dan resep #${recordRes.prescription_id} masuk antrean apoteker.`
+          ? `Rekam Medis #${recordRes.id} tersimpan dan resep #${recordRes.prescription_id} diterbitkan.`
           : `Rekam Medis #${recordRes.id} tersimpan tanpa resep obat.`,
         'success'
       );
@@ -620,76 +712,77 @@ export function AppProvider({ children }) {
     }
   };
 
-  // Soft delete EMR (Dokter / Admin)
-  const softDeleteEMR = async (emrId, reason = 'Koreksi rekam medis oleh staf klinis') => {
+  const updateEMR = async (emrId, emrData) => {
     try {
-      await medicalRecordsApi.softDelete(emrId, reason);
-      // Reload daftar EMR dengan include_deleted=true
-      const emrList = await medicalRecordsApi.getAll({ include_deleted: true });
-      setEmrs((emrList || []).map(normalizeEMR));
-      showToast(`Rekam Medis #${emrId} berhasil di-soft delete (data tetap tersimpan aman di database).`, 'danger');
+      const recordRes = await medicalRecordsApi.update(emrId, {
+        complaint: emrData.complaint,
+        diagnosis: emrData.diagnosis,
+        treatment: emrData.action,
+        prescriptionItems: emrData.prescriptionItems,
+        prescriptionNote: emrData.prescriptionNote || null,
+        vitalBp: emrData.vitals?.bp,
+        vitalHeartRate: emrData.vitals?.heartRate,
+        vitalTemperature: emrData.vitals?.temperature,
+        vitalRespRate: emrData.vitals?.respRate,
+        vitalWeight: emrData.vitals?.weight,
+      });
+      const normalizedEMR = normalizeEMR(recordRes);
+      setEmrs((prev) => prev.map((record) =>
+        Number(record.id) === Number(emrId) ? normalizedEMR : record
+      ));
+      setViewingEMR((current) =>
+        current && Number(current.id) === Number(emrId) ? normalizedEMR : current
+      );
+
+      try {
+        await refreshPrescriptions();
+        showToast(`Rekam Medis #${emrId} dan resep terkait berhasil diperbarui.`, 'success');
+      } catch (refreshError) {
+        console.warn('Rekam medis tersimpan, tetapi antrean resep gagal disegarkan:', refreshError);
+        showToast(
+          'Rekam medis tersimpan, tetapi antrean resep belum dapat disegarkan. Data akan dicoba ulang otomatis.',
+          'info'
+        );
+      }
+      return normalizedEMR;
     } catch (err) {
-      showToast(err.message || 'Gagal menghapus rekam medis.', 'danger');
+      showToast(err.message || 'Gagal memperbarui rekam medis.', 'danger');
+      throw err;
     }
   };
 
-  // Restore soft-deleted EMR (Dokter / Admin)
+  const deleteEMR = async (emrId, reason = 'Dihapus oleh dokter pemeriksa') => {
+    try {
+      await medicalRecordsApi.delete(emrId, reason);
+      const deletedId = Number(emrId);
+      setEmrs((previous) => previous.filter((record) => Number(record.id) !== deletedId));
+      setPrescriptions((previous) =>
+        previous.filter((prescription) => Number(prescription.medicalRecordId) !== deletedId)
+      );
+      setViewingEMR((current) => (
+        current && Number(current.id) === deletedId ? null : current
+      ));
+      setEditingEMR((current) => (
+        current && Number(current.id) === deletedId ? null : current
+      ));
+      showToast(`Rekam Medis #${emrId} berhasil dihapus. Hanya admin yang dapat memulihkannya.`, 'success');
+      return true;
+    } catch (err) {
+      showToast(err.message || 'Gagal menghapus rekam medis.', 'danger');
+      return false;
+    }
+  };
+
   const restoreEMR = async (emrId) => {
     try {
       await medicalRecordsApi.restore(emrId);
       const emrList = await medicalRecordsApi.getAll({ include_deleted: true });
       setEmrs((emrList || []).map(normalizeEMR));
-      showToast(`Rekam Medis #${emrId} berhasil dipulihkan!`, 'success');
+      showToast(`Rekam Medis #${emrId} berhasil dipulihkan.`, 'success');
+      return true;
     } catch (err) {
       showToast(err.message || 'Gagal memulihkan rekam medis.', 'danger');
-    }
-  };
-
-  // Pharmacist updates prescription status
-  const updatePrescriptionStatus = async (rxId, newStatus, pharmacistNotes = '') => {
-    try {
-      const updated = await prescriptionsApi.updateStatus(rxId, {
-        status: newStatus,
-        pharmacist_notes: pharmacistNotes || `Status diperbarui menjadi ${newStatus} oleh apoteker.`
-      });
-
-      setPrescriptions((prev) => prev.map((rx) => rx.id === rxId
-        ? {
-            ...rx,
-            status: updated.status,
-            pharmacistNotes: updated.pharmacist_notes ?? rx.pharmacistNotes,
-          }
-        : rx));
-      try {
-        await refreshPrescriptions();
-      } catch (refreshError) {
-        console.warn('Status resep berhasil diperbarui; daftar lengkap gagal disegarkan:', refreshError);
-      }
-
-      // Jika selesai, refresh obat karena stok berkurang di server
-      if (newStatus === 'Selesai / Sudah Diambil') {
-        const medList = await medicinesApi.getAll();
-        setMedicines(medList || []);
-      }
-
-      showToast(`Resep #${rxId} berhasil diperbarui: ${newStatus}`, 'success');
-    } catch (err) {
-      showToast(err.message || 'Gagal memperbarui status resep obat.', 'danger');
-    }
-  };
-
-  // Update medicine stock (Apoteker)
-  const updateMedicineStock = async (medId, delta) => {
-    const med = medicines.find((m) => m.id === medId);
-    if (!med) return;
-    const nextStock = Math.max(0, (med.stock || 0) + delta);
-
-    try {
-      const updated = await medicinesApi.update(medId, { stock: nextStock });
-      setMedicines((prev) => prev.map((m) => (m.id === medId ? { ...m, stock: updated.stock } : m)));
-      showToast(`Stok ${med.name} berhasil diperbarui: ${nextStock} ${med.unit || 'unit'}`, 'success');
-    } catch (err) {
-      showToast(err.message || 'Gagal memperbarui stok obat.', 'danger');
+      return false;
     }
   };
 
@@ -727,7 +820,7 @@ export function AppProvider({ children }) {
           address: patient.address || '-',
           bloodType: patient.blood_type || '-',
           allergies: patient.allergies || '-',
-          avatar: getDefaultAvatar('pasien', patient.full_name),
+          avatar: DEFAULT_AVATAR,
           status: res.user.is_active ? 'Aktif' : 'Nonaktif',
         }]);
         showToast(`Pasien ${patient.full_name} berhasil didaftarkan.`, 'success');
@@ -738,7 +831,9 @@ export function AppProvider({ children }) {
         const res = await usersApi.createDoctor({
           ...payload,
           specialization: newUser.specialty || 'Dokter Umum',
-          strNumber: newUser.sip || '446/MED/2026'
+          strNumber: newUser.sip || null,
+          phone: newUser.phone || null,
+          workplace: newUser.hospital || null,
         });
         const doctor = {
           id: res.doctor?.id || res.user?.id,
@@ -746,8 +841,10 @@ export function AppProvider({ children }) {
           name: newUser.name,
           role: 'dokter',
           specialty: newUser.specialty || 'Dokter Umum',
-          sip: newUser.sip || '446/MED/2026',
-          avatar: getDefaultAvatar('dokter', newUser.name),
+          sip: newUser.sip || '',
+          avatar: res.doctor?.profile_photo_url || DEFAULT_AVATAR,
+          phone: newUser.phone || '',
+          hospital: newUser.hospital || '',
           status: 'Aktif'
         };
         setUsers((prev) => [...prev, doctor]);
@@ -780,9 +877,9 @@ export function AppProvider({ children }) {
   const updateUserProfile = async (profileForm) => {
     try {
       const targetId = currentUser?.id;
-      if (!targetId) return;
+      if (!targetId) return false;
 
-      await usersApi.updateProfile({
+      const profile = {
         fullName: profileForm.name || profileForm.fullName,
         nik: profileForm.nik,
         birthDate: profileForm.birthDate || null,
@@ -791,7 +888,13 @@ export function AppProvider({ children }) {
         address: profileForm.address,
         bloodType: profileForm.bloodType,
         allergies: profileForm.allergies
-      });
+      };
+      if (currentUser.role === 'dokter') {
+        profile.specialization = profileForm.specialization || profileForm.specialty;
+        profile.strNumber = profileForm.strNumber || profileForm.sip;
+        profile.workplace = profileForm.workplace;
+      }
+      await usersApi.updateProfile(targetId, profile);
 
       setCurrentUser((prev) => ({
         ...prev,
@@ -803,12 +906,77 @@ export function AppProvider({ children }) {
         gender: profileForm.gender || prev.gender,
         address: profileForm.address || prev.address,
         bloodType: profileForm.bloodType || prev.bloodType,
-        allergies: profileForm.allergies || prev.allergies
+        allergies: profileForm.allergies || prev.allergies,
+        specialization: profileForm.specialization || profileForm.specialty || prev.specialization,
+        specialty: profileForm.specialization || profileForm.specialty || prev.specialty,
+        strNumber: profileForm.strNumber || profileForm.sip || prev.strNumber,
+        sip: profileForm.strNumber || profileForm.sip || prev.sip,
+        workplace: profileForm.workplace || prev.workplace,
       }));
 
-      showToast('Profil Anda berhasil diperbarui di database!', 'success');
+      showToast('Profil Anda berhasil diperbarui.', 'success');
+      return true;
     } catch (err) {
       showToast(err.message || 'Gagal memperbarui profil.', 'danger');
+      return false;
+    }
+  };
+
+  const uploadProfilePhoto = async (image) => {
+    try {
+      if (!currentUser?.id) return false;
+      const result = await usersApi.uploadProfilePhoto(currentUser.id, image);
+      setCurrentUser((prev) => ({
+        ...prev,
+        avatar: result.profile_photo_url || DEFAULT_AVATAR,
+        profilePhotoUrl: result.profile_photo_url || '',
+      }));
+      showToast('Foto profil berhasil diperbarui.', 'success');
+      return true;
+    } catch (err) {
+      showToast(err.message || 'Gagal mengunggah foto profil.', 'danger');
+      return false;
+    }
+  };
+
+  const deleteUser = async (userId, reason) => {
+    try {
+      await usersApi.delete(userId, reason);
+      setUsers((prev) => prev.filter((user) => Number(user.userId) !== Number(userId)));
+      await refreshDeletedRecords();
+      showToast('Akun dipindahkan ke pemulihan admin.', 'success');
+      return true;
+    } catch (err) {
+      showToast(err.message || 'Gagal menghapus akun.', 'danger');
+      return false;
+    }
+  };
+
+  const deleteAppointment = async (id, reason) => {
+    try {
+      await consultationsApi.delete(id, reason);
+      setAppointments((prev) => prev.filter((appointment) => Number(appointment.id) !== Number(id)));
+      await refreshDeletedRecords();
+      showToast('Konsultasi dipindahkan ke pemulihan admin.', 'success');
+      return true;
+    } catch (err) {
+      showToast(err.message || 'Gagal menghapus konsultasi.', 'danger');
+      return false;
+    }
+  };
+
+  const restoreDeletedRecord = async (entity, id) => {
+    try {
+      await adminRecoveryApi.restore(entity, id);
+      if (entity === 'medical-record') await refreshEMRs();
+      if (entity === 'consultation') await refreshAppointments();
+      if (entity === 'user') await refreshUsers();
+      await refreshDeletedRecords();
+      showToast('Data berhasil dipulihkan.', 'success');
+      return true;
+    } catch (err) {
+      showToast(err.message || 'Gagal memulihkan data.', 'danger');
+      return false;
     }
   };
 
@@ -891,12 +1059,17 @@ export function AppProvider({ children }) {
         addUser,
         toggleUserStatus,
         updateUserProfile,
+        uploadProfilePhoto,
+        deleteUser,
+        refreshUsers,
 
         // Appointments & Consultations
         appointments,
         addAppointment,
         confirmAppointment,
         updateAppointmentStatus,
+        deleteAppointment,
+        refreshAppointments,
         teleconsultationSession,
         setTeleconsultationSession,
         isBookingOpen,
@@ -905,17 +1078,21 @@ export function AppProvider({ children }) {
         // Medical Records (EMR)
         emrs,
         saveEMR,
-        softDeleteEMR,
+        updateEMR,
+        refreshEMRs,
+        deleteEMR,
         restoreEMR,
+        deletedRecords,
+        refreshDeletedRecords,
+        restoreDeletedRecord,
         viewingEMR,
         setViewingEMR,
+        editingEMR,
+        setEditingEMR,
 
-        // Pharmacy & Medicines
-        medicines,
+        // Prescriptions
         prescriptions,
         refreshPrescriptions,
-        updatePrescriptionStatus,
-        updateMedicineStock,
 
         // Audit Logs & DRP Cloud
         auditLogs,

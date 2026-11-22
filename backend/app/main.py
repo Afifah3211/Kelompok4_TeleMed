@@ -10,6 +10,7 @@ from app.config import settings
 from app.db import close_db_pool, init_db_pool
 from app.limiter import limiter
 from app.routers import (
+    admin_recovery,
     audit_logs,
     auth,
     backup,
@@ -19,9 +20,9 @@ from app.routers import (
     files,
     health,
     medical_records,
-    medicines,
     prescriptions,
     users,
+    video_signals,
 )
 
 logging.basicConfig(
@@ -33,9 +34,11 @@ logger = logging.getLogger("telemed.api")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Memulai aplikasi TeleMed FastAPI...")
+    logger.info("Memulai aplikasi MediSync FastAPI...")
     await init_db_pool()
+    await users.ensure_profile_recovery_schema()
     await chat.ensure_chat_schema()
+    await video_signals.ensure_video_schema()
     await prescriptions.ensure_prescription_status_schema()
     try:
         files.init_minio_bucket()
@@ -43,13 +46,13 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning(f"Inisialisasi MinIO bucket dilewati: {exc}")
     yield
-    logger.info("Menghentikan aplikasi TeleMed FastAPI...")
+    logger.info("Menghentikan aplikasi MediSync FastAPI...")
     await close_db_pool()
 
 
 app = FastAPI(
-    title="TeleMed API",
-    description="Backend API Platform Telemedis Kelompok 4 (FastAPI + PostgreSQL 16)",
+    title="MediSync API",
+    description="MediSync telemedicine API (FastAPI + PostgreSQL 16)",
     version="2.0.0",
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
@@ -101,12 +104,13 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api", tags=["health"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api/users", tags=["users"])
+app.include_router(admin_recovery.router, prefix="/api/admin/recovery", tags=["admin-recovery"])
 app.include_router(consultations.router, prefix="/api/consultations", tags=["consultations"])
 app.include_router(medical_records.router, prefix="/api/medical-records", tags=["medical-records"])
 app.include_router(audit_logs.router, prefix="/api/audit-logs", tags=["audit-logs"])
-app.include_router(medicines.router, prefix="/api/medicines", tags=["medicines"])
 app.include_router(prescriptions.router, prefix="/api/prescriptions", tags=["prescriptions"])
 app.include_router(backup.router, prefix="/api/backup", tags=["backup"])
 app.include_router(drp.router, prefix="/api/drp", tags=["drp"])
 app.include_router(files.router, prefix="/api/files", tags=["files"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+app.include_router(video_signals.router, prefix="/api/video", tags=["video"])

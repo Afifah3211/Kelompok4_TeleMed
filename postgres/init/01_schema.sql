@@ -15,6 +15,10 @@ CREATE TABLE IF NOT EXISTS users (
   role          VARCHAR(20)  NOT NULL
                 CHECK (role IN ('admin','dokter','pasien','apoteker')),
   is_active     BOOLEAN      NOT NULL DEFAULT TRUE,
+  is_deleted    BOOLEAN      NOT NULL DEFAULT FALSE,
+  deleted_at    TIMESTAMPTZ,
+  deleted_by    VARCHAR(150),
+  delete_reason TEXT,
   created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
@@ -29,7 +33,8 @@ CREATE TABLE IF NOT EXISTS patients (
   phone      VARCHAR(30),
   address    TEXT,
   blood_type VARCHAR(3),
-  allergies  TEXT
+  allergies  TEXT,
+  profile_photo_key VARCHAR(512)
 );
 
 -- 3. doctors -------------------------------------------------
@@ -38,7 +43,10 @@ CREATE TABLE IF NOT EXISTS doctors (
   user_id        INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
   full_name      VARCHAR(150) NOT NULL,
   specialization VARCHAR(150),
-  str_number     VARCHAR(60)
+  str_number     VARCHAR(60),
+  phone          VARCHAR(30),
+  workplace      VARCHAR(150),
+  profile_photo_key VARCHAR(512)
 );
 
 -- 3b. pharmacists (role apoteker ada di aplikasi) -------------
@@ -62,12 +70,17 @@ CREATE TABLE IF NOT EXISTS consultations (
   complaint    TEXT,
   room_url     TEXT,
   notes        TEXT,
+  is_deleted   BOOLEAN NOT NULL DEFAULT FALSE,
+  deleted_at   TIMESTAMPTZ,
+  deleted_by   VARCHAR(150),
+  delete_reason TEXT,
   created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_consult_patient ON consultations(patient_id);
 CREATE INDEX IF NOT EXISTS idx_consult_doctor  ON consultations(doctor_id);
 CREATE INDEX IF NOT EXISTS idx_consult_status  ON consultations(status);
+CREATE INDEX IF NOT EXISTS idx_consult_deleted ON consultations(is_deleted);
 
 -- 5. medical_records (soft delete) ----------------------------
 CREATE TABLE IF NOT EXISTS medical_records (
@@ -130,8 +143,8 @@ CREATE TABLE IF NOT EXISTS prescriptions (
   consultation_id   INTEGER REFERENCES consultations(id),
   patient_id        INTEGER NOT NULL REFERENCES patients(id),
   doctor_id         INTEGER NOT NULL REFERENCES doctors(id),
-  status            VARCHAR(40) NOT NULL DEFAULT 'Menunggu Penyiapan'
-                    CHECK (status IN ('Menunggu Penyiapan','Sedang Diramu','Selesai / Sudah Diambil','Dikembalikan ke Dokter')),
+  status            VARCHAR(40) NOT NULL DEFAULT 'Diterbitkan'
+                    CHECK (status IN ('Diterbitkan','Menunggu Penyiapan','Sedang Diramu','Selesai / Sudah Diambil','Dikembalikan ke Dokter')),
   notes             TEXT,
   pharmacist_notes  TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -165,6 +178,27 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_consultation_created
   ON chat_messages(consultation_id, created_at, id);
+
+-- 7c. WebRTC video-call signaling (SDP/ICE only; temporary metadata) ----
+CREATE TABLE IF NOT EXISTS consultation_video_sessions (
+  consultation_id INTEGER PRIMARY KEY REFERENCES consultations(id) ON DELETE CASCADE,
+  session_id      UUID NOT NULL,
+  started_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ended_at        TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS consultation_video_signals (
+  id              BIGSERIAL PRIMARY KEY,
+  consultation_id INTEGER NOT NULL REFERENCES consultations(id) ON DELETE CASCADE,
+  session_id      UUID NOT NULL,
+  sender_user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  signal_type     VARCHAR(20) NOT NULL
+                  CHECK (signal_type IN ('offer','answer','candidate','hangup')),
+  payload         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_video_signals_room
+  ON consultation_video_signals(consultation_id, session_id, id);
 
 -- 8. backup (konfigurasi tampilan + log eksekusi nyata) -------
 CREATE TABLE IF NOT EXISTS backup_config (
