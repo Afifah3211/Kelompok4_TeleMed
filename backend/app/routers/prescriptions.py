@@ -1,7 +1,7 @@
 from typing import Any
 from fastapi import APIRouter, Depends
 
-from app.db import execute, fetch_all
+from app.db import execute, fetch_all, transaction
 from app.security import get_current_user
 
 router = APIRouter()
@@ -9,23 +9,25 @@ router = APIRouter()
 
 async def ensure_prescription_status_schema() -> None:
     """Keep legacy statuses readable while adding the non-pharmacy prescription state."""
-    await execute(
-        "ALTER TABLE prescriptions DROP CONSTRAINT IF EXISTS prescriptions_status_check;"
-    )
-    await execute(
-        """
-        ALTER TABLE prescriptions
-        ADD CONSTRAINT prescriptions_status_check
-        CHECK (status IN (
-            'Diterbitkan',
-            'Menunggu Penyiapan',
-            'Sedang Diramu',
-            'Selesai / Sudah Diambil',
-            'Dikembalikan ke Dokter'
-        ));
-        """
-    )
-    await execute("ALTER TABLE prescriptions ALTER COLUMN status SET DEFAULT 'Diterbitkan';")
+    async with transaction() as conn:
+        await conn.execute("SELECT pg_advisory_xact_lock(620221);")
+        await conn.execute(
+            "ALTER TABLE prescriptions DROP CONSTRAINT IF EXISTS prescriptions_status_check;"
+        )
+        await conn.execute(
+            """
+            ALTER TABLE prescriptions
+            ADD CONSTRAINT prescriptions_status_check
+            CHECK (status IN (
+                'Diterbitkan',
+                'Menunggu Penyiapan',
+                'Sedang Diramu',
+                'Selesai / Sudah Diambil',
+                'Dikembalikan ke Dokter'
+            ));
+            """
+        )
+        await conn.execute("ALTER TABLE prescriptions ALTER COLUMN status SET DEFAULT 'Diterbitkan';")
 
 
 @router.get("")

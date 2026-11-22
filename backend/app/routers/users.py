@@ -28,19 +28,24 @@ MAX_PROFILE_IMAGE_BYTES = 5 * 1024 * 1024
 
 async def ensure_profile_recovery_schema():
     """Apply additive columns needed by existing database volumes."""
-    await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;")
-    await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;")
-    await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_by VARCHAR(150);")
-    await execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS delete_reason TEXT;")
-    await execute("ALTER TABLE patients ADD COLUMN IF NOT EXISTS profile_photo_key VARCHAR(512);")
-    await execute("ALTER TABLE doctors ADD COLUMN IF NOT EXISTS phone VARCHAR(30);")
-    await execute("ALTER TABLE doctors ADD COLUMN IF NOT EXISTS workplace VARCHAR(150);")
-    await execute("ALTER TABLE doctors ADD COLUMN IF NOT EXISTS profile_photo_key VARCHAR(512);")
-    await execute("ALTER TABLE consultations ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;")
-    await execute("ALTER TABLE consultations ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;")
-    await execute("ALTER TABLE consultations ADD COLUMN IF NOT EXISTS deleted_by VARCHAR(150);")
-    await execute("ALTER TABLE consultations ADD COLUMN IF NOT EXISTS delete_reason TEXT;")
-    await execute("CREATE INDEX IF NOT EXISTS idx_consult_deleted ON consultations(is_deleted);")
+    async with transaction() as conn:
+        await conn.execute("SELECT pg_advisory_xact_lock(620221);")
+        for statement in (
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_by VARCHAR(150);",
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS delete_reason TEXT;",
+            "ALTER TABLE patients ADD COLUMN IF NOT EXISTS profile_photo_key VARCHAR(512);",
+            "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS phone VARCHAR(30);",
+            "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS workplace VARCHAR(150);",
+            "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS profile_photo_key VARCHAR(512);",
+            "ALTER TABLE consultations ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE;",
+            "ALTER TABLE consultations ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;",
+            "ALTER TABLE consultations ADD COLUMN IF NOT EXISTS deleted_by VARCHAR(150);",
+            "ALTER TABLE consultations ADD COLUMN IF NOT EXISTS delete_reason TEXT;",
+            "CREATE INDEX IF NOT EXISTS idx_consult_deleted ON consultations(is_deleted);",
+        ):
+            await conn.execute(statement)
 
 
 class CreateDoctorRequest(BaseModel):

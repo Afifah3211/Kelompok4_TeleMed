@@ -307,28 +307,45 @@ async def seed_data():
                     INSERT INTO backup_config (
                         id, policy, last_backup, next_backup, backup_schedule, encryption, retention
                     ) VALUES (1, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (id) DO NOTHING;
+                    ON CONFLICT (id) DO UPDATE SET
+                        policy = EXCLUDED.policy,
+                        last_backup = CASE
+                            WHEN backup_config.policy = 'Aturan 3-2-1' THEN NULL
+                            ELSE backup_config.last_backup
+                        END,
+                        next_backup = EXCLUDED.next_backup,
+                        backup_schedule = EXCLUDED.backup_schedule,
+                        encryption = EXCLUDED.encryption,
+                        retention = EXCLUDED.retention;
                     """,
                     (
-                        "Aturan 3-2-1",
-                        "2026-10-19 02:00:00+07",
-                        "2026-10-20 02:00:00+07",
-                        "Harian 02:00 WIB",
-                        "AES-256 GCM",
-                        "30 Hari Snapshot",
+                        "Backup PostgreSQL terjadwal (single-host)",
+                        None,
+                        None,
+                        "Dump tiap 6 jam; base harian; sync tiap 5 menit",
+                        "AES-256-CBC untuk salinan file di host yang sama",
+                        "7 hari lokal; 30 hari pada folder salinan di host yang sama",
                     ),
                 )
                 nodes_data = [
-                    (1, 1, "Salinan 1 (Production)", "SSD NVMe", "Data Center Jakarta", "Optimal", "24.8 MB", "< 1 ms"),
-                    (2, 1, "Salinan 2 (NAS Lokal)", "NAS RAID-10", "Server Room Klinik", "Sinkron", "24.8 MB", "2 ms"),
-                    (3, 1, "Salinan 3 (Offsite Cloud)", "S3 Glacier", "Cloud Singapura", "Terverifikasi", "24.8 MB", "28 ms"),
+                    (1, 1, "Data utama", "Docker volume PostgreSQL pgdata", "Host Docker saat ini", "Persisten; single-host", "-", "-"),
+                    (2, 1, "Dump logis", "pg_dump -Fc tiap 6 jam", "Docker volume backups:/backups/dump", "Terjadwal", "-", "-"),
+                    (3, 1, "Base backup dan WAL", "pg_basebackup harian; WAL archive", "Docker volume backups dan wal_archive", "WAL PITR belum diuji", "-", "-"),
+                    (4, 1, "Salinan terenkripsi", "AES-256-CBC", "./offsite pada host yang sama", "Bukan offsite lintas host", "-", "-"),
                 ]
                 await cur.executemany(
                     """
                     INSERT INTO backup_nodes (
                         id, config_id, copy_label, type, location, status, size, latency
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (id) DO NOTHING;
+                    ON CONFLICT (id) DO UPDATE SET
+                        config_id = EXCLUDED.config_id,
+                        copy_label = EXCLUDED.copy_label,
+                        type = EXCLUDED.type,
+                        location = EXCLUDED.location,
+                        status = EXCLUDED.status,
+                        size = EXCLUDED.size,
+                        latency = EXCLUDED.latency;
                     """,
                     nodes_data,
                 )

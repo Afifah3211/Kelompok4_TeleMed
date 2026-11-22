@@ -7,7 +7,6 @@ import {
   medicalRecordsApi, 
   auditLogsApi, 
   backupApi, 
-  drpApi, 
   prescriptionsApi,
   adminRecoveryApi,
   getToken,
@@ -192,16 +191,11 @@ export function AppProvider({ children }) {
   const [deletedRecords, setDeletedRecords] = useState({ medical_records: [], consultations: [], users: [] });
   const [auditLogs, setAuditLogs] = useState([]);
   const [backupConfig, setBackupConfig] = useState({
-    policyName: '3-2-1 Backup & Cloud Disaster Recovery Plan',
-    rtoTarget: '30 Menit',
-    rpoTarget: '1 Menit',
-    lastBackup: 'Belum ada pencadangan',
-    storageNodes: [
-      { type: 'Volume Snapshot Docker', copy: 'Copy 1 (Lokal Host)', status: 'Sinkron (Tersimpan)', path: 'telemed_pgdata', size: '24.8 MB' },
-      { type: 'Logical Dump pg_dump -Fc', copy: 'Copy 2 (Format Berbeda)', status: 'Tersedia', path: '/backups/dump', size: '18.2 MB' },
-      { type: 'Base Backup + Continuous WAL', copy: 'Copy 2 (PITR Engine)', status: 'Aktif Streaming', path: '/backups/wal_archive', size: '12.4 MB' },
-      { type: 'Off-site Cloud Replica S3 AES-256', copy: 'Copy 3 (Off-site Cloud)', status: 'Terverifikasi (Aman)', path: 's3://telemed-cold-archive', size: '25.1 MB' }
-    ]
+    policyName: 'Backup PostgreSQL terjadwal (single-host)',
+    rtoTarget: 'maksimal 5 menit untuk restore drill; ukur aktual',
+    rpoTarget: 'maksimal 6 jam dari dump terjadwal',
+    lastBackup: 'Belum ada job backup tercatat',
+    recentRuns: []
   });
   const [prescriptions, setPrescriptions] = useState([]);
 
@@ -419,20 +413,10 @@ export function AppProvider({ children }) {
             setBackupConfig((prev) => ({
               ...prev,
               policyName: bData.config.policy_name || prev.policyName,
-              rtoTarget: bData.config.rto_target || prev.rtoTarget,
-              rpoTarget: bData.config.rpo_target || prev.rpoTarget,
               lastBackup: bData.recent_runs && bData.recent_runs.length > 0
-                ? String(bData.recent_runs[0].started_at).slice(0, 19).replace('T', ' ') + ' WIB'
+                ? `${String(bData.recent_runs[0].started_at).slice(0, 19).replace('T', ' ')} WIB`
                 : prev.lastBackup,
-              storageNodes: (bData.nodes && bData.nodes.length > 0)
-                ? bData.nodes.map((n) => ({
-                    type: n.node_name,
-                    copy: n.node_type,
-                    status: n.status,
-                    path: n.storage_path,
-                    size: n.size_bytes ? `${(n.size_bytes / (1024 * 1024)).toFixed(2)} MB` : '18.2 MB'
-                  }))
-                : prev.storageNodes
+              recentRuns: bData.recent_runs || []
             }));
           }
         } catch (bErr) {
@@ -1011,20 +995,12 @@ export function AppProvider({ children }) {
       if (bData && bData.config) {
         setBackupConfig((prev) => ({
           ...prev,
-          lastBackup: `${res.file_name} (${res.file_size_mb} MB)`,
-          storageNodes: (bData.nodes && bData.nodes.length > 0)
-            ? bData.nodes.map((n) => ({
-                type: n.node_name,
-                copy: n.node_type,
-                status: n.status,
-                path: n.storage_path,
-                size: n.size_bytes ? `${(n.size_bytes / (1024 * 1024)).toFixed(2)} MB` : `${res.file_size_mb} MB`
-              }))
-            : prev.storageNodes
+          lastBackup: `${res.file_name} (${(res.size_bytes / (1024 * 1024)).toFixed(2)} MB)`,
+          recentRuns: bData.recent_runs || []
         }));
       }
 
-      showToast(`Pencadangan Sukses! File: ${res.file_name} (${res.file_size_mb} MB, waktu: ${res.duration_seconds}s)`, 'success');
+      showToast(`Pencadangan sukses: ${res.file_name} (${(res.size_bytes / (1024 * 1024)).toFixed(2)} MB).`, 'success');
       return res;
     } catch (err) {
       showToast(err.message || 'Gagal mengeksekusi pencadangan pg_dump.', 'danger');
@@ -1040,18 +1016,6 @@ export function AppProvider({ children }) {
       showToast('Berkas CSV audit logs berhasil diunduh.', 'success');
     } catch (err) {
       showToast(err.message || 'Gagal mengekspor audit logs.', 'danger');
-    }
-  };
-
-  // Simulate PITR Recovery (Dokumen DRP Bab 5.6: 9 Langkah Pemulihan)
-  const simulatePITRRecovery = async (targetTime = '2026-10-19 13:44:00') => {
-    try {
-      const drpStatus = await drpApi.getStatus();
-      const dbSize = drpStatus.database?.size_pretty || '32 MB';
-      const archivedWal = drpStatus.archiver?.archived_count || 1;
-      showToast(`Simulasi PITR Sukses! Target: ${targetTime}. Ukuran DB: ${dbSize}, WAL Archive: ${archivedWal}. RTO: 24 Menit, RPO: 0 Data Hilang.`, 'success');
-    } catch (err) {
-      showToast(`Simulasi PITR Sukses! RTO: 24 Menit, RPO: 0 (Data dipulihkan ke ${targetTime})`, 'success');
     }
   };
 
@@ -1114,12 +1078,11 @@ export function AppProvider({ children }) {
         prescriptions,
         refreshPrescriptions,
 
-        // Audit Logs & DRP Cloud
+        // Audit Logs & Backup DRP
         auditLogs,
         backupConfig,
         triggerManualBackup,
         exportAuditLogsCsv,
-        simulatePITRRecovery,
 
         // Toasts
         toasts,

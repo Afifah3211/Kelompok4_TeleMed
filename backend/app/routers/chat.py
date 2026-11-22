@@ -7,7 +7,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 
 from app.config import settings
-from app.db import execute, fetch_all, fetch_one
+from app.db import execute, fetch_all, fetch_one, transaction
 from app.routers.files import _cdn_url, _ensure_bucket, _s3_client
 from app.security import get_current_user
 
@@ -22,28 +22,30 @@ IMAGE_TYPES = {
 
 async def ensure_chat_schema() -> None:
     """Create chat metadata table for both new and already-initialized DB volumes."""
-    await execute(
-        """
-        CREATE TABLE IF NOT EXISTS chat_messages (
-            id BIGSERIAL PRIMARY KEY,
-            consultation_id INTEGER NOT NULL REFERENCES consultations(id) ON DELETE CASCADE,
-            sender_user_id INTEGER NOT NULL REFERENCES users(id),
-            body TEXT,
-            attachment_key VARCHAR(512),
-            attachment_name VARCHAR(255),
-            attachment_content_type VARCHAR(100),
-            attachment_size_bytes BIGINT,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            CONSTRAINT chat_message_has_content CHECK (
-                NULLIF(BTRIM(body), '') IS NOT NULL OR attachment_key IS NOT NULL
-            )
-        );
-        """
-    )
-    await execute(
-        "CREATE INDEX IF NOT EXISTS idx_chat_messages_consultation_created "
-        "ON chat_messages(consultation_id, created_at, id);"
-    )
+    async with transaction() as conn:
+        await conn.execute("SELECT pg_advisory_xact_lock(620221);")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id BIGSERIAL PRIMARY KEY,
+                consultation_id INTEGER NOT NULL REFERENCES consultations(id) ON DELETE CASCADE,
+                sender_user_id INTEGER NOT NULL REFERENCES users(id),
+                body TEXT,
+                attachment_key VARCHAR(512),
+                attachment_name VARCHAR(255),
+                attachment_content_type VARCHAR(100),
+                attachment_size_bytes BIGINT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                CONSTRAINT chat_message_has_content CHECK (
+                    NULLIF(BTRIM(body), '') IS NOT NULL OR attachment_key IS NOT NULL
+                )
+            );
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_chat_messages_consultation_created "
+            "ON chat_messages(consultation_id, created_at, id);"
+        )
 
 
 async def _consultation_for_participant(

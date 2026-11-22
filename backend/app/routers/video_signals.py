@@ -23,36 +23,38 @@ class VideoSignalRequest(BaseModel):
 
 
 async def ensure_video_schema() -> None:
-    await execute(
-        """
-        CREATE TABLE IF NOT EXISTS consultation_video_sessions (
-            consultation_id INTEGER PRIMARY KEY REFERENCES consultations(id) ON DELETE CASCADE,
-            session_id UUID NOT NULL,
-            started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            ended_at TIMESTAMPTZ
-        );
-        """
-    )
-    await execute(
-        """
-        CREATE TABLE IF NOT EXISTS consultation_video_signals (
-            id BIGSERIAL PRIMARY KEY,
-            consultation_id INTEGER NOT NULL REFERENCES consultations(id) ON DELETE CASCADE,
-            session_id UUID NOT NULL,
-            sender_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-            signal_type VARCHAR(20) NOT NULL
-                CHECK (signal_type IN ('offer', 'answer', 'candidate', 'hangup')),
-            payload JSONB NOT NULL DEFAULT '{}'::jsonb,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        );
-        """
-    )
-    await execute(
-        """
-        CREATE INDEX IF NOT EXISTS idx_video_signals_room
-        ON consultation_video_signals(consultation_id, session_id, id);
-        """
-    )
+    async with transaction() as conn:
+        await conn.execute("SELECT pg_advisory_xact_lock(620221);")
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS consultation_video_sessions (
+                consultation_id INTEGER PRIMARY KEY REFERENCES consultations(id) ON DELETE CASCADE,
+                session_id UUID NOT NULL,
+                started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                ended_at TIMESTAMPTZ
+            );
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS consultation_video_signals (
+                id BIGSERIAL PRIMARY KEY,
+                consultation_id INTEGER NOT NULL REFERENCES consultations(id) ON DELETE CASCADE,
+                session_id UUID NOT NULL,
+                sender_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                signal_type VARCHAR(20) NOT NULL
+                    CHECK (signal_type IN ('offer', 'answer', 'candidate', 'hangup')),
+                payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+            """
+        )
+        await conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_video_signals_room
+            ON consultation_video_signals(consultation_id, session_id, id);
+            """
+        )
 
 
 async def _video_consultation_for_participant(

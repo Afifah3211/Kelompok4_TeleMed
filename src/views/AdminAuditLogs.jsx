@@ -17,15 +17,10 @@ import {
   AlertTriangle,
   CheckCircle2,
   Plus,
-  Lock,
-  Server,
-  Cloud,
-  HardDrive,
   Eye,
   Trash2,
   Calendar,
   Stethoscope,
-  Play,
   RotateCcw,
   Clock,
   Sparkles,
@@ -47,7 +42,6 @@ export default function AdminAuditLogs() {
     backupConfig,
     triggerManualBackup,
     exportAuditLogsCsv,
-    simulatePITRRecovery,
     showToast
   } = useApp();
 
@@ -957,85 +951,33 @@ export default function AdminAuditLogs() {
         </div>
       )}
 
-      {/* TAB 4: DRP & CLOUD BACKUP SIMULATION */}
+      {/* TAB 4: BACKUP & DISASTER RECOVERY */}
       {activeAdminTab === 'backup-drp' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* Simulation Trigger Box matching Chapter 5 of PDF */}
-          <div
-            style={{
-              background: 'linear-gradient(135deg, #1E1B4B 0%, #0F172A 100%)',
-              borderRadius: '16px',
-              padding: '24px',
-              color: '#FFFFFF',
-              border: '1px solid #312E81'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-              <div>
-                <span className="badge badge-accent" style={{ background: '#3730A3', color: '#C7D2FE', border: 'none', marginBottom: '8px' }}>
-                  Simulasi Praktikum Cloud Computing (UINSA 2026)
-                </span>
-                <h3 style={{ fontSize: '1.35rem', fontWeight: 800 }}>
-                  Simulasi Pemulihan Bencana: Skenario Tabel Terhapus (PITR)
-                </h3>
-                <p style={{ color: '#94A3B8', fontSize: '0.88rem', maxWidth: '750px', marginTop: '6px' }}>
-                  Menguji kepatuhan Disaster Recovery Plan Bab 5.6: Jika terjadi insiden salah eksekusi <code>DROP TABLE</code> pada pukul 13:45, sistem memulihkan PostgreSQL ke target 13:44 WIB menggunakan Base Backup + Replay WAL kontinu. Target RTO &le; 30 menit & RPO &le; 1 menit.
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button
-                  className="btn btn-primary"
-                  style={{ background: '#4F46E5', display: 'flex', alignItems: 'center', gap: '8px' }}
-                  onClick={() => simulatePITRRecovery('2026-10-19 13:44:00')}
-                >
-                  <Play size={16} />
-                  <span>Jalankan Simulasi PITR 9 Langkah</span>
-                </button>
-              </div>
-            </div>
-
-            {/* 9 Steps visual timeline */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px', marginTop: '24px' }}>
-              {[
-                { step: '1', title: 'Deteksi Error', desc: '13:45:00 WIB' },
-                { step: '2', title: 'Stop Backend', desc: 'Cegah data kotor' },
-                { step: '3', title: 'Amankan WAL', desc: 'pg_switch_wal()' },
-                { step: '4', title: 'Stop DB Bukti', desc: 'Copy forensik' },
-                { step: '5', title: 'Restore Base', desc: 'Extract pgdata' },
-                { step: '6', title: 'Target PITR', desc: '13:44:00 WIB' },
-                { step: '7', title: 'Replay WAL', desc: 'Putar ulang log' },
-                { step: '8', title: 'Validasi', desc: 'Checksum data' },
-                { step: '9', title: 'Start & RTO', desc: 'Pulih (24 menit)' }
-              ].map((s, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    borderRadius: '8px',
-                    padding: '10px',
-                    textAlign: 'center'
-                  }}
-                >
-                  <div style={{ fontWeight: 800, color: '#818CF8', fontSize: '0.85rem' }}>Langkah {s.step}</div>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 600, color: '#FFFFFF', marginTop: '2px' }}>{s.title}</div>
-                  <div style={{ fontSize: '0.68rem', color: '#94A3B8', marginTop: '2px' }}>{s.desc}</div>
-                </div>
-              ))}
+          <div style={{ background: '#FFFFFF', borderRadius: '16px', padding: '24px', color: '#0F172A', border: '1px solid #E2E8F0' }}>
+            <span className="badge badge-accent" style={{ marginBottom: '8px' }}>Latihan restore database penuh</span>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>Pemulihan diuji pada database terisolasi</h3>
+            <p style={{ color: '#475569', fontSize: '0.9rem', maxWidth: '900px', marginTop: '8px' }}>
+              Jalankan <code> .\dr_test.ps1</code> dari root project. Skrip membuat dump PostgreSQL penuh, merestorenya ke database latihan pada service PostgreSQL yang sama, lalu membandingkan semua tabel dan jumlah baris. Database utama tidak dihapus.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginTop: '18px' }}>
+              <div><strong>RTO latihan:</strong> target maksimal 5 menit, ukur hasil aktual.</div>
+              <div><strong>RPO dump terjadwal:</strong> target maksimal 6 jam.</div>
+              <div><strong>RPO drill:</strong> 0 relatif terhadap dump yang baru dibuat.</div>
+              <div><strong>Batas:</strong> bukan uji host mati, failover, atau PITR WAL.</div>
             </div>
           </div>
 
-          {/* 4 Lapis Strategi Backup */}
+          {/* Backup schedule and execution history */}
           <div className="card">
             <div className="card-header">
               <div>
                 <h2 className="card-title">
                   <Database size={20} color="#0F766E" />
-                  Strategi Backup 4 Lapis & Aturan 3-2-1
+                  Jadwal & Riwayat Backup
                 </h2>
                 <p style={{ fontSize: '0.82rem', color: '#64748B', marginTop: '2px' }}>
-                  Snapshot volume Docker mingguan, Dump logis tiap 6 jam, Base Backup + WAL kontinu, dan Salinan Off-site AES-256.
+                  Dump logis tiap 6 jam, base backup harian, dan WAL diarsipkan. Folder ./offsite berada pada host yang sama, jadi tidak melindungi dari kerusakan host.
                 </p>
               </div>
 
@@ -1045,94 +987,37 @@ export default function AdminAuditLogs() {
               </button>
             </div>
 
-            {/* 3-2-1 Architectural Status Nodes */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '24px' }}>
-              {backupConfig.storageNodes.map((node, i) => (
-                <div
-                  key={i}
-                  style={{
-                    border: '1.5px solid #E2E8F0',
-                    borderRadius: '12px',
-                    padding: '18px',
-                    background: '#FFFFFF',
-                    borderTop: i === 0 ? '4px solid #1D4ED8' : i === 1 ? '4px solid #0F766E' : '4px solid #7C3AED'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {i === 0 && <HardDrive size={20} color="#1D4ED8" />}
-                      {i === 1 && <Server size={20} color="#0F766E" />}
-                      {i === 2 && <Cloud size={20} color="#7C3AED" />}
-                      <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{node.copy}</span>
-                    </div>
-                    <span className="badge badge-selesai">
-                      <CheckCircle2 size={12} /> {node.status}
-                    </span>
-                  </div>
-
-                  <div style={{ fontSize: '0.85rem', color: '#334155', fontWeight: 600 }}>{node.type}</div>
-                  <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '2px' }}>Lokasi: {node.location}</div>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '14px', paddingTop: '10px', borderTop: '1px solid #F1F5F9', fontSize: '0.78rem' }}>
-                    <span>Ukuran: <strong>{node.size}</strong></span>
-                    <span>Latensi: <strong>{node.latency}</strong></span>
-                  </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '24px' }}>
+              {[
+                ['Data utama', 'Docker volume pgdata; melindungi dari container terganti, bukan host rusak.'],
+                ['Dump logis', 'pg_dump -Fc tiap 6 jam ke volume Docker backups.'],
+                ['Base backup dan WAL', 'Base backup harian; WAL diarsipkan, tetapi PITR belum diuji.'],
+                ['Salinan terenkripsi', './offsite di host yang sama; bukan backup 3-2-1 lintas lokasi.'],
+                ['File MinIO', 'Volume minio_data terpisah; belum termasuk dalam backup database.']
+              ].map(([title, detail]) => (
+                <div key={title} style={{ border: '1px solid #E2E8F0', borderRadius: '10px', padding: '14px', background: '#FFFFFF' }}>
+                  <strong style={{ color: '#0F172A' }}>{title}</strong>
+                  <p style={{ margin: '6px 0 0', color: '#64748B', fontSize: '0.82rem' }}>{detail}</p>
                 </div>
               ))}
             </div>
 
-            {/* Backup Specifications details */}
-            <div
-              style={{
-                background: '#F8FAFC',
-                border: '1px solid #E2E8F0',
-                borderRadius: '12px',
-                padding: '20px',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                gap: '16px',
-                marginBottom: '24px'
-              }}
-            >
-              <div>
-                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>METODE ENKRIPSI</div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A', marginTop: '2px' }}>
-                  <Lock size={14} style={{ display: 'inline', marginRight: '4px' }} />
-                  {backupConfig.encryption || 'AES-256-GCM (Offsite & Dump)'}
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>TARGET RTO & RPO</div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#1D4ED8', marginTop: '2px' }}>
-                  RTO &le; {backupConfig.rtoTarget || '30 Menit'} • RPO &le; {backupConfig.rpoTarget || '1 Menit'}
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>TERAKHIR DILAKUKAN</div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F766E', marginTop: '2px' }}>
-                  {backupConfig.lastBackup}
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>RETENSI ARSIP DATA</div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem', color: '#0F172A', marginTop: '2px' }}>
-                  {backupConfig.retention || '24 Jam Bergulir / 30 Hari Arsip'}
-                </div>
-              </div>
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
+              <h4 style={{ margin: '0 0 12px', fontSize: '0.95rem', fontWeight: 700 }}>Target dan batas pemulihan</h4>
+              <p style={{ margin: 0, color: '#475569', fontSize: '0.85rem', lineHeight: 1.7 }}>
+                RTO latihan maksimal 5 menit dan harus diukur. RPO dump terjadwal ditargetkan maksimal 6 jam; RPO 0 hanya relatif terhadap dump yang baru dibuat dalam restore drill. WAL sudah diarsipkan, tetapi PITR belum diuji. Salinan ./offsite ada pada host yang sama.
+              </p>
             </div>
 
-            {/* Kesehatan Sistem dan Backup: Snapshot History + Parameter Infrastruktur */}
+            {/* Riwayat backup dan batas implementasi */}
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px', alignItems: 'start' }}>
               <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', overflow: 'hidden', background: '#FFFFFF' }}>
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>
-                    Riwayat Snapshot Basis Data
+                    Riwayat Backup Database
                   </h4>
                   <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
-                    Arsip terverifikasi pg_dump &amp; WAL
+                    Job backup yang tercatat pada database
                   </span>
                 </div>
                 <div className="table-container">
@@ -1150,7 +1035,7 @@ export default function AdminAuditLogs() {
                       {(backupConfig.recentRuns || []).length === 0 ? (
                         <tr>
                           <td colSpan="5" style={{ textAlign: 'center', padding: '24px', color: '#64748B' }}>
-                            Belum ada riwayat snapshot tercatat. Klik "Picu Backup Manual Sekarang" untuk membuat snapshot baru.
+                            Belum ada job backup tercatat. Tunggu jadwal backup atau picu dump manual.
                           </td>
                         </tr>
                       ) : (
@@ -1187,32 +1072,32 @@ export default function AdminAuditLogs() {
 
               <div style={{ border: '1px solid #E2E8F0', borderRadius: '12px', padding: '18px', background: '#FFFFFF' }}>
                 <h4 style={{ margin: '0 0 14px 0', fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>
-                  Parameter Kebijakan Backup &amp; Sistem
+                  Batas Pemulihan
                 </h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.8rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
-                    <span style={{ color: '#64748B' }}>Status Klaster DB</span>
-                    <strong style={{ color: '#0F766E' }}>PostgreSQL 16 (Healthy)</strong>
+                    <span style={{ color: '#64748B' }}>Metode dump</span>
+                    <strong style={{ color: '#0F172A' }}>PostgreSQL custom (-Fc)</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
-                    <span style={{ color: '#64748B' }}>Storage CDN</span>
-                    <strong style={{ color: '#0F766E' }}>MinIO / Silo S3 (Healthy)</strong>
+                    <span style={{ color: '#64748B' }}>Jadwal dump</span>
+                    <strong style={{ color: '#0F172A' }}>Tiap 6 jam</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
-                    <span style={{ color: '#64748B' }}>Format &amp; Kompresi</span>
-                    <strong style={{ color: '#0F172A' }}>PostgreSQL Custom (-Fc)</strong>
+                    <span style={{ color: '#64748B' }}>Target RTO drill</span>
+                    <strong style={{ color: '#0F172A' }}>≤ 5 menit; ukur aktual</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
-                    <span style={{ color: '#64748B' }}>Integritas Arsip</span>
-                    <strong style={{ color: '#0F172A' }}>SHA-256 + AES-256</strong>
+                    <span style={{ color: '#64748B' }}>Target RPO dump</span>
+                    <strong style={{ color: '#0F172A' }}>≤ 6 jam</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #F1F5F9' }}>
-                    <span style={{ color: '#64748B' }}>Interval Snapshot</span>
-                    <strong style={{ color: '#0F172A' }}>Otomatis + Manual</strong>
+                    <span style={{ color: '#64748B' }}>PITR dari WAL</span>
+                    <strong style={{ color: '#B45309' }}>Belum diuji</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748B' }}>Arsip Tersimpan</span>
-                    <strong style={{ color: '#1D4ED8' }}>{(backupConfig.recentRuns || []).length} Snapshot</strong>
+                    <span style={{ color: '#64748B' }}>Offsite lintas host</span>
+                    <strong style={{ color: '#B45309' }}>Belum dikonfigurasi</strong>
                   </div>
                 </div>
               </div>
